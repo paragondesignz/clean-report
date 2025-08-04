@@ -3,18 +3,19 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/components/auth/auth-provider"
+import DashboardLayout from "@/components/layout/dashboard-layout"
 
-export default function HomePage() {
+export default function DashboardLayoutWrapper({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const { user, loading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading) {
-      if (user) {
-        router.push("/dashboard")
-      } else {
-        router.push("/login")
-      }
+    if (!loading && !user) {
+      router.push("/login")
     }
   }, [user, loading, router])
 
@@ -29,5 +30,9 @@ export default function HomePage() {
     )
   }
 
-  return null
-}
+  if (!user) {
+    return null
+  }
+
+  return <DashboardLayout>{children}</DashboardLayout>
+} 
