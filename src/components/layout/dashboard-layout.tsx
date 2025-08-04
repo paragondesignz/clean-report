@@ -55,7 +55,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen bg-gray-50 flex">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div 
@@ -65,33 +65,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between p-8 border-b border-slate-200">
-            <div className="flex items-center">
-              <div className="h-10 w-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl flex items-center justify-center mr-3">
-                <Sparkles className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <div className="text-xl font-bold text-slate-900">C</div>
-                <div className="text-lg font-bold text-slate-900">CLEAN REPORT</div>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="lg:hidden hover:bg-slate-100"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+          <div className="flex items-center justify-center h-16 border-b border-gray-200">
+            <h1 className="text-xl font-bold text-gray-900">Clean Report</h1>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-6 py-8 space-y-1 overflow-y-auto">
+          <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
             {navItems.map((item) => {
               const Icon = item.icon
               const isActive = pathname === item.href
@@ -100,11 +84,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isActive
-                      ? 'bg-purple-50 text-purple-700 border border-purple-200 shadow-sm'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
+                  className={`nav-item ${isActive ? 'active' : ''}`}
                   onClick={() => setSidebarOpen(false)}
                 >
                   <Icon className="h-5 w-5 mr-3" />
@@ -115,11 +95,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </nav>
 
           {/* External Links */}
-          <div className="px-6 py-4 border-t border-slate-200">
+          <div className="px-4 py-4 border-t border-gray-200">
             <div className="space-y-2">
               <Link
                 href="/booking/demo"
-                className="flex items-center px-4 py-3 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all duration-200"
+                className="nav-item"
                 target="_blank"
                 onClick={() => setSidebarOpen(false)}
               >
@@ -128,7 +108,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Link>
               <Link
                 href="/feedback/demo"
-                className="flex items-center px-4 py-3 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all duration-200"
+                className="nav-item"
                 target="_blank"
                 onClick={() => setSidebarOpen(false)}
               >
@@ -139,10 +119,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           {/* Sign out */}
-          <div className="p-6 border-t border-slate-200">
+          <div className="p-4 border-t border-gray-200">
             <Button
               variant="ghost"
-              className="w-full justify-start text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-xl"
+              className="w-full justify-start text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg"
               onClick={handleSignOut}
             >
               <LogOut className="h-5 w-5 mr-3" />
@@ -155,7 +135,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main content area */}
       <div className="flex-1 flex flex-col lg:ml-0">
         {/* Mobile header */}
-        <header className="lg:hidden bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-30">
+        <header className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-30">
           <div className="flex items-center justify-between">
             <Button
               variant="ghost"
@@ -165,31 +145,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Menu className="h-5 w-5" />
             </Button>
             <div className="flex items-center">
-              <div className="h-8 w-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center mr-2">
-                <Sparkles className="h-5 w-5 text-white" />
+              <div className="h-8 w-8 bg-blue-500 rounded-lg flex items-center justify-center mr-2">
+                <span className="text-white font-medium">C</span>
               </div>
-              <span className="text-lg font-semibold text-slate-900">Clean Report</span>
+              <span className="text-lg font-semibold text-gray-900">Clean Report</span>
             </div>
             <div className="w-10" /> {/* Spacer for centering */}
           </div>
         </header>
 
         {/* Top Header Bar */}
-        <header className="bg-white border-b border-slate-200 px-8 py-6">
+        <header className="bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-slate-900">Dashboard Overview</h1>
+              <h1 className="text-lg font-semibold text-gray-900">
+                {navItems.find(item => item.href === pathname)?.label || "Dashboard"}
+              </h1>
             </div>
-            <div className="flex items-center">
+            <div className="flex items-center space-x-4">
               <Link href="/settings">
-                <div className="flex items-center space-x-3 cursor-pointer hover:bg-slate-50 rounded-lg p-2 transition-colors">
-                  <div className="h-10 w-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
-                    <span className="text-white font-medium">J</span>
+                <div className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 rounded-lg p-2 transition-colors">
+                  <div className="h-8 w-8 bg-blue-500 rounded-full flex items-center justify-center">
+                    <span className="text-white font-medium">
+                      {user?.email?.charAt(0).toUpperCase() || 'U'}
+                    </span>
                   </div>
-                  <div>
-                    <div className="font-medium text-slate-900">Jonathan</div>
-                    <div className="text-sm text-slate-600">jonathan@gmail.com</div>
-                  </div>
+                  <span className="text-sm font-medium text-gray-700">
+                    {user?.email || 'User'}
+                  </span>
                 </div>
               </Link>
             </div>
@@ -197,7 +180,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-8 overflow-auto">
+        <main className="flex-1 p-6 overflow-auto">
           <div className="max-w-7xl mx-auto">
             {children}
           </div>

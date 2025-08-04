@@ -257,7 +257,7 @@ export default function ClientsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredClients.map((client) => (
-            <Card key={client.id} className="shadow-lg border-slate-200 hover:shadow-xl transition-shadow">
+            <Card key={client.id} className="crm-card">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg text-slate-900">{client.name}</CardTitle>
@@ -278,28 +278,28 @@ export default function ClientsPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex items-center text-sm text-slate-600">
+                <div className="flex items-center text-sm text-gray-600">
                   <Mail className="h-4 w-4 mr-2" />
                   {client.email}
                 </div>
-                <div className="flex items-center text-sm text-slate-600">
+                <div className="flex items-center text-sm text-gray-600">
                   <Phone className="h-4 w-4 mr-2" />
                   {client.phone}
                 </div>
-                <div className="flex items-start text-sm text-slate-600">
+                <div className="flex items-start text-sm text-gray-600">
                   <MapPin className="h-4 w-4 mr-2 mt-0.5" />
                   <span className="line-clamp-2">{client.address}</span>
                 </div>
                 
                 {/* Quick Actions */}
-                <div className="pt-3 border-t border-slate-100">
-                  <p className="text-xs font-medium text-slate-500 mb-2">Quick Actions</p>
+                <div className="pt-3 border-t border-gray-100">
+                  <p className="text-xs font-medium text-gray-500 mb-2">Quick Actions</p>
                   <div className="grid grid-cols-2 gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleScheduleJob(client)}
-                      className="h-8 text-xs justify-start text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                      className="h-8 text-xs justify-start text-gray-600 hover:text-gray-900 hover:bg-gray-50"
                     >
                       <Clock className="h-3 w-3 mr-1" />
                       Schedule Job
@@ -308,7 +308,7 @@ export default function ClientsPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleSendEmail(client)}
-                      className="h-8 text-xs justify-start text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                      className="h-8 text-xs justify-start text-gray-600 hover:text-gray-900 hover:bg-gray-50"
                     >
                       <Mail className="h-3 w-3 mr-1" />
                       Send Email
@@ -317,7 +317,7 @@ export default function ClientsPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleCallClient(client)}
-                      className="h-8 text-xs justify-start text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                      className="h-8 text-xs justify-start text-gray-600 hover:text-gray-900 hover:bg-gray-50"
                     >
                       <Phone className="h-3 w-3 mr-1" />
                       Call Client
@@ -326,7 +326,7 @@ export default function ClientsPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleViewJobs(client)}
-                      className="h-8 text-xs justify-start text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                      className="h-8 text-xs justify-start text-gray-600 hover:text-gray-900 hover:bg-gray-50"
                     >
                       <ExternalLink className="h-3 w-3 mr-1" />
                       View Jobs
