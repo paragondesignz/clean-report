@@ -42,6 +42,9 @@ export interface Database {
           description: string
           scheduled_date: string
           scheduled_time: string
+          end_time: string | null
+          recurring_job_id: string | null
+          recurring_instance_date: string | null
           status: 'enquiry' | 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
           timer_started_at: string | null
           timer_ended_at: string | null
@@ -57,6 +60,9 @@ export interface Database {
           description: string
           scheduled_date: string
           scheduled_time: string
+          end_time?: string | null
+          recurring_job_id?: string | null
+          recurring_instance_date?: string | null
           status?: 'enquiry' | 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
           timer_started_at?: string | null
           timer_ended_at?: string | null
@@ -72,6 +78,9 @@ export interface Database {
           description?: string
           scheduled_date?: string
           scheduled_time?: string
+          end_time?: string | null
+          recurring_job_id?: string | null
+          recurring_instance_date?: string | null
           status?: 'enquiry' | 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
           timer_started_at?: string | null
           timer_ended_at?: string | null

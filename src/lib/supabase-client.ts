@@ -1096,6 +1096,119 @@ export const deleteRecurringJob = async (id: string) => {
   if (error) throw error
 }
 
+// Generate job instances from a recurring job
+export const generateJobInstances = async (recurringJobId: string, untilDate?: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    // Get the recurring job details
+    const { data: recurringJob, error: fetchError } = await supabase
+      .from('recurring_jobs')
+      .select('*, client:clients(name)')
+      .eq('id', recurringJobId)
+      .eq('user_id', user.id)
+      .single()
+    
+    if (fetchError) throw fetchError
+    if (!recurringJob) throw new Error('Recurring job not found')
+    
+    // Calculate the dates for job instances based on frequency
+    const instances = []
+    const startDate = new Date(recurringJob.start_date)
+    const endDate = untilDate ? new Date(untilDate) : 
+                    recurringJob.end_date ? new Date(recurringJob.end_date) :
+                    new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) // Default to 90 days
+    
+    let currentDate = new Date(startDate)
+    
+    while (currentDate <= endDate) {
+      // Check if instance already exists for this date
+      const { data: existingJob } = await supabase
+        .from('jobs')
+        .select('id')
+        .eq('recurring_job_id', recurringJobId)
+        .eq('recurring_instance_date', currentDate.toISOString().split('T')[0])
+        .single()
+      
+      if (!existingJob) {
+        instances.push({
+          user_id: user.id,
+          client_id: recurringJob.client_id,
+          title: recurringJob.title,
+          description: recurringJob.description,
+          scheduled_date: currentDate.toISOString().split('T')[0],
+          scheduled_time: recurringJob.scheduled_time,
+          end_time: null, // Can be set individually
+          recurring_job_id: recurringJobId,
+          recurring_instance_date: currentDate.toISOString().split('T')[0],
+          status: 'scheduled' as const
+        })
+      }
+      
+      // Increment date based on frequency
+      switch (recurringJob.frequency) {
+        case 'daily':
+          currentDate.setDate(currentDate.getDate() + 1)
+          break
+        case 'weekly':
+          currentDate.setDate(currentDate.getDate() + 7)
+          break
+        case 'bi_weekly':
+          currentDate.setDate(currentDate.getDate() + 14)
+          break
+        case 'monthly':
+          currentDate.setMonth(currentDate.getMonth() + 1)
+          break
+      }
+    }
+    
+    // Insert all new instances
+    if (instances.length > 0) {
+      const { data, error: insertError } = await supabase
+        .from('jobs')
+        .insert(instances)
+        .select()
+      
+      if (insertError) throw insertError
+      
+      // Update last_generated_date
+      await supabase
+        .from('recurring_jobs')
+        .update({ last_generated_date: new Date().toISOString() })
+        .eq('id', recurringJobId)
+      
+      return data
+    }
+    
+    return []
+  } catch (error) {
+    console.error('Error generating job instances:', error)
+    throw error
+  }
+}
+
+// Get job instances for a recurring job
+export const getRecurringJobInstances = async (recurringJobId: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { data, error } = await supabase
+      .from('jobs')
+      .select('*, client:clients(name)')
+      .eq('recurring_job_id', recurringJobId)
+      .eq('user_id', user.id)
+      .order('scheduled_date', { ascending: true })
+    
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error('Error fetching recurring job instances:', error)
+    throw error
+  }
+}
+
 // Supply operations
 
 export const createSupply = async (supplyData: {

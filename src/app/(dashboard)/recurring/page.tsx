@@ -11,13 +11,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, Edit, Trash2, Calendar, Clock, User, RefreshCw, CheckCircle, XCircle, Building2, DollarSign } from "lucide-react"
-import { getRecurringJobs, createRecurringJob, updateRecurringJob, deleteRecurringJob, getClients, testRecurringJobsTable, checkRequiredTables } from "@/lib/supabase-client"
+import { Plus, Edit, Trash2, Calendar, Clock, User, RefreshCw, CheckCircle, XCircle, Building2, DollarSign, Play, Eye } from "lucide-react"
+import { getRecurringJobs, createRecurringJob, updateRecurringJob, deleteRecurringJob, getClients, testRecurringJobsTable, checkRequiredTables, generateJobInstances, getRecurringJobInstances } from "@/lib/supabase-client"
 import { formatDate, formatTime, formatDistanceToNow, formatListDate } from "@/lib/utils"
 import { DataTable } from "@/components/ui/data-table"
 import { useSubscription } from "@/hooks/use-subscription"
 import { UpgradePrompt } from "@/components/ui/upgrade-prompt"
-import type { RecurringJob, Client, RecurringJobWithClient } from "@/types/database"
+import type { RecurringJob, Client, RecurringJobWithClient, JobWithClient } from "@/types/database"
 
 export default function RecurringJobsPage() {
   const { toast } = useToast()
@@ -28,6 +28,9 @@ export default function RecurringJobsPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
   const [editingJob, setEditingJob] = useState<RecurringJobWithClient | null>(null)
+  const [viewingInstances, setViewingInstances] = useState<string | null>(null)
+  const [jobInstances, setJobInstances] = useState<JobWithClient[]>([])
+  const [generatingInstances, setGeneratingInstances] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     client_id: "",
     title: "",
@@ -138,6 +141,43 @@ export default function RecurringJobsPage() {
       toast({
         title: "Error",
         description: "Failed to delete recurring job",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleGenerateInstances = async (jobId: string) => {
+    try {
+      setGeneratingInstances(jobId)
+      const instances = await generateJobInstances(jobId)
+      toast({
+        title: "Success",
+        description: `Generated ${instances.length} job instances`
+      })
+      // Optionally refresh or show instances
+      handleViewInstances(jobId)
+    } catch (error) {
+      console.error('Error generating instances:', error)
+      toast({
+        title: "Error",
+        description: "Failed to generate job instances",
+        variant: "destructive"
+      })
+    } finally {
+      setGeneratingInstances(null)
+    }
+  }
+
+  const handleViewInstances = async (jobId: string) => {
+    try {
+      const instances = await getRecurringJobInstances(jobId)
+      setJobInstances(instances || [])
+      setViewingInstances(jobId)
+    } catch (error) {
+      console.error('Error fetching instances:', error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch job instances",
         variant: "destructive"
       })
     }
@@ -412,6 +452,19 @@ export default function RecurringJobsPage() {
         ]}
         customActions={[
           {
+            label: 'Generate Instances',
+            icon: Play,
+            onClick: (row) => handleGenerateInstances(row.id),
+            variant: 'outline',
+            loading: generatingInstances === row.id
+          },
+          {
+            label: 'View Instances',
+            icon: Eye,
+            onClick: (row) => handleViewInstances(row.id),
+            variant: 'outline'
+          },
+          {
             label: 'Edit',
             icon: Edit,
             onClick: (row) => handleEdit(recurringJobs.find(j => j.id === row.id)!),
@@ -549,6 +602,57 @@ export default function RecurringJobsPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Instances Dialog */}
+      <Dialog open={!!viewingInstances} onOpenChange={() => setViewingInstances(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Job Instances</DialogTitle>
+            <DialogDescription>
+              Individual job occurrences generated from this recurring pattern. Each can be edited independently.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {jobInstances.length === 0 ? (
+              <p className="text-center text-muted-foreground py-4">
+                No instances generated yet. Click "Generate Instances" to create job occurrences.
+              </p>
+            ) : (
+              jobInstances.map((job) => (
+                <Card key={job.id} className="p-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-medium">{job.title}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {formatDate(job.scheduled_date)} at {formatTime(job.scheduled_time)}
+                        {job.end_time && ` - ${formatTime(job.end_time)}`}
+                      </p>
+                      <Badge variant="outline" className="mt-1">
+                        {job.status}
+                      </Badge>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => window.location.href = `/jobs/${job.id}`}
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewingInstances(null)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

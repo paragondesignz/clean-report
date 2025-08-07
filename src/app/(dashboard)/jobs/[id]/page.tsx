@@ -17,11 +17,14 @@ import {
   Trash2, 
   Plus, 
   CheckCircle, 
-  Clock, 
+  Clock,
+  RefreshCw, 
   User, 
   MapPin, 
   Calendar,
   Camera,
+  Play,
+  X,
   FileText,
   MessageSquare,
   AlertCircle,
@@ -97,16 +100,20 @@ export default function JobDetailsPage() {
     description: "",
     scheduled_date: "",
     scheduled_time: "",
+    end_time: null as string | null,
     status: "scheduled" as Job['status'],
-    client_id: ""
+    client_id: "",
+    recurring_job_id: null as string | null
   })
   const [originalFormData, setOriginalFormData] = useState({
     title: "",
     description: "",
     scheduled_date: "",
     scheduled_time: "",
+    end_time: null as string | null,
     status: "scheduled" as Job['status'],
-    client_id: ""
+    client_id: "",
+    recurring_job_id: null as string | null
   })
 
   const fetchJobDetails = useCallback(async (jobId: string) => {
@@ -120,16 +127,20 @@ export default function JobDetailsPage() {
           description: jobData.description || "",
           scheduled_date: jobData.scheduled_date,
           scheduled_time: jobData.scheduled_time || "",
+          end_time: jobData.end_time || null,
           status: jobData.status || "scheduled",
-          client_id: jobData.client_id
+          client_id: jobData.client_id,
+          recurring_job_id: jobData.recurring_job_id || null
         })
         setOriginalFormData({
           title: jobData.title,
           description: jobData.description || "",
           scheduled_date: jobData.scheduled_date,
           scheduled_time: jobData.scheduled_time || "",
+          end_time: jobData.end_time || null,
           status: jobData.status || "scheduled",
-          client_id: jobData.client_id
+          client_id: jobData.client_id,
+          recurring_job_id: jobData.recurring_job_id || null
         })
       } else {
         toast({
@@ -180,6 +191,7 @@ export default function JobDetailsPage() {
         description: formData.description,
         scheduled_date: formData.scheduled_date,
         scheduled_time: formData.scheduled_time,
+        end_time: formData.end_time,
         status: formData.status,
         client_id: formData.client_id
       })
@@ -513,6 +525,17 @@ export default function JobDetailsPage() {
     }
   }
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'scheduled': return 'bg-blue-100 text-blue-800'
+      case 'in_progress': return 'bg-yellow-100 text-yellow-800'
+      case 'completed': return 'bg-green-100 text-green-800'
+      case 'cancelled': return 'bg-red-100 text-red-800'
+      case 'enquiry': return 'bg-purple-100 text-purple-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
   const openLightbox = (photoIndex: number) => {
     setCurrentPhotoIndex(photoIndex)
     setLightboxOpen(true)
@@ -612,17 +635,18 @@ export default function JobDetailsPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex items-center space-x-4">
           <Button variant="ghost" onClick={() => handleNavigation("/jobs")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Jobs
+            <span className="hidden sm:inline">Back to Jobs</span>
+            <span className="sm:hidden">Back</span>
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
               {isEditing ? "Edit Job" : job.title}
             </h1>
-            <p className="text-gray-600">Job Details</p>
+            <p className="text-gray-600 text-sm lg:text-base">Job Details</p>
           </div>
         </div>
         <div className="flex items-center space-x-2">
@@ -692,13 +716,66 @@ export default function JobDetailsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Mobile Quick Status Change */}
+      {!isEditing && (
+        <div className="lg:hidden bg-white p-4 rounded-lg shadow-sm border">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-gray-700">Quick Status Change</span>
+            <Badge className={getStatusColor(job.status)}>
+              {job.status.replace('_', ' ').charAt(0).toUpperCase() + job.status.slice(1).replace('_', ' ')}
+            </Badge>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {job.status === 'scheduled' && (
+              <Button
+                onClick={() => handleStatusChange('in_progress')}
+                className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                size="sm"
+              >
+                <Play className="h-4 w-4 mr-1" />
+                Start Job
+              </Button>
+            )}
+            {job.status === 'in_progress' && (
+              <Button
+                onClick={() => handleStatusChange('completed')}
+                className="bg-green-500 hover:bg-green-600 text-white"
+                size="sm"
+              >
+                <CheckCircle className="h-4 w-4 mr-1" />
+                Complete
+              </Button>
+            )}
+            {(job.status === 'scheduled' || job.status === 'in_progress') && (
+              <Button
+                onClick={() => handleStatusChange('cancelled')}
+                variant="outline"
+                className="border-red-500 text-red-600 hover:bg-red-50"
+                size="sm"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Cancel
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Job Information */}
           <Card className="crm-card">
             <CardHeader>
-              <CardTitle className="text-gray-900">Job Information</CardTitle>
+              <CardTitle className="text-gray-900">
+                Job Information
+                {job?.recurring_job_id && (
+                  <Badge variant="outline" className="ml-2 text-xs">
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Recurring Instance
+                  </Badge>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               {isEditing ? (
@@ -736,12 +813,25 @@ export default function JobDetailsPage() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="scheduled_time">Scheduled Time</Label>
+                      <Label htmlFor="scheduled_time">Start Time</Label>
                       <Input
                         id="scheduled_time"
                         type="time"
                         value={formData.scheduled_time}
                         onChange={(e) => setFormData({ ...formData, scheduled_time: e.target.value })}
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="end_time">End Time (Optional)</Label>
+                      <Input
+                        id="end_time"
+                        type="time"
+                        value={formData.end_time || ''}
+                        onChange={(e) => setFormData({ ...formData, end_time: e.target.value || null })}
                         className="mt-1"
                       />
                     </div>
@@ -793,7 +883,10 @@ export default function JobDetailsPage() {
                     </div>
                     <div>
                       <h3 className="font-medium text-gray-900">Scheduled Time</h3>
-                      <p className="text-gray-600 mt-1">{formatTime(job.scheduled_time)}</p>
+                      <p className="text-gray-600 mt-1">
+                        {formatTime(job.scheduled_time)}
+                        {job.end_time && ` - ${formatTime(job.end_time)}`}
+                      </p>
                     </div>
                   </div>
                   
@@ -1160,8 +1253,9 @@ export default function JobDetailsPage() {
                     size="sm"
                     onClick={() => handleStatusChange('scheduled')}
                     disabled={job?.status === 'scheduled'}
-                    className="w-full"
+                    className={`w-full ${job?.status === 'scheduled' ? 'bg-blue-50 border-blue-500' : ''}`}
                   >
+                    <Clock className="h-4 w-4 mr-1" />
                     Scheduled
                   </Button>
                   <Button
@@ -1169,8 +1263,9 @@ export default function JobDetailsPage() {
                     size="sm"
                     onClick={() => handleStatusChange('in_progress')}
                     disabled={job?.status === 'in_progress'}
-                    className="w-full"
+                    className={`w-full ${job?.status === 'in_progress' ? 'bg-yellow-50 border-yellow-500' : ''}`}
                   >
+                    <Play className="h-4 w-4 mr-1" />
                     In Progress
                   </Button>
                   <Button
@@ -1178,8 +1273,9 @@ export default function JobDetailsPage() {
                     size="sm"
                     onClick={() => handleStatusChange('completed')}
                     disabled={job?.status === 'completed'}
-                    className="w-full"
+                    className={`w-full ${job?.status === 'completed' ? 'bg-green-50 border-green-500' : ''}`}
                   >
+                    <CheckCircle className="h-4 w-4 mr-1" />
                     Completed
                   </Button>
                   <Button
@@ -1187,8 +1283,9 @@ export default function JobDetailsPage() {
                     size="sm"
                     onClick={() => handleStatusChange('cancelled')}
                     disabled={job?.status === 'cancelled'}
-                    className="w-full"
+                    className={`w-full ${job?.status === 'cancelled' ? 'bg-red-50 border-red-500' : ''}`}
                   >
+                    <X className="h-4 w-4 mr-1" />
                     Cancelled
                   </Button>
                 </div>
