@@ -121,7 +121,7 @@ export default function JobDetailsPage() {
           description: jobData.description || "",
           scheduled_date: jobData.scheduled_date,
           scheduled_time: jobData.scheduled_time || "",
-          status: jobData.status,
+          status: jobData.status || "scheduled",
           client_id: jobData.client_id
         })
         setOriginalFormData({
@@ -129,7 +129,7 @@ export default function JobDetailsPage() {
           description: jobData.description || "",
           scheduled_date: jobData.scheduled_date,
           scheduled_time: jobData.scheduled_time || "",
-          status: jobData.status,
+          status: jobData.status || "scheduled",
           client_id: jobData.client_id
         })
       } else {
@@ -806,9 +806,9 @@ export default function JobDetailsPage() {
                     <div>
                       <h3 className="font-medium text-gray-900">Status</h3>
                       <div className="flex items-center space-x-2 mt-1">
-                        {getStatusIcon(job.status)}
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(job.status)}`}>
-                          {job.status.replace('_', ' ')}
+                        {job?.status && getStatusIcon(job.status)}
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${job?.status ? getStatusColor(job.status) : 'bg-gray-100 text-gray-800'}`}>
+                          {job?.status ? job.status.replace('_', ' ') : 'Unknown'}
                         </span>
                       </div>
                     </div>
@@ -1148,11 +1148,11 @@ export default function JobDetailsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center space-x-3">
-                {getStatusIcon(job.status)}
+                {job?.status && getStatusIcon(job.status)}
                 <div>
                   <h3 className="font-medium text-gray-900">Status</h3>
-                  <Badge className={getStatusColor(job.status)}>
-                    {job.status.replace('_', ' ')}
+                  <Badge className={job?.status ? getStatusColor(job.status) : 'bg-gray-100 text-gray-800'}>
+                    {job?.status ? job.status.replace('_', ' ') : 'Unknown'}
                   </Badge>
                 </div>
               </div>
@@ -1163,7 +1163,7 @@ export default function JobDetailsPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => handleStatusChange('scheduled')}
-                    disabled={job.status === 'scheduled'}
+                    disabled={job?.status === 'scheduled'}
                     className="w-full"
                   >
                     Scheduled
@@ -1172,7 +1172,7 @@ export default function JobDetailsPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => handleStatusChange('in_progress')}
-                    disabled={job.status === 'in_progress'}
+                    disabled={job?.status === 'in_progress'}
                     className="w-full"
                   >
                     In Progress
@@ -1181,7 +1181,7 @@ export default function JobDetailsPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => handleStatusChange('completed')}
-                    disabled={job.status === 'completed'}
+                    disabled={job?.status === 'completed'}
                     className="w-full"
                   >
                     Completed
@@ -1190,7 +1190,7 @@ export default function JobDetailsPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => handleStatusChange('cancelled')}
-                    disabled={job.status === 'cancelled'}
+                    disabled={job?.status === 'cancelled'}
                     className="w-full"
                   >
                     Cancelled
