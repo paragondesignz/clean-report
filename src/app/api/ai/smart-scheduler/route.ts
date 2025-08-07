@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 
-// Initialize OpenAI client on the server side
-const openai = new OpenAI({
+// Initialize OpenAI client only if API key is available
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-})
+}) : null
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if OpenAI is configured
+    if (!openai) {
+      return NextResponse.json(
+        { error: 'AI service not configured. Please set OPENAI_API_KEY environment variable.' },
+        { status: 500 }
+      )
+    }
+
     const { jobs, preferences, constraints } = await request.json()
 
     if (!jobs || jobs.length === 0) {

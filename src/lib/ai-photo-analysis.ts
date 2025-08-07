@@ -1,9 +1,9 @@
 import OpenAI from 'openai'
 
-// Initialize OpenAI client
-const openai = new OpenAI({
+// Initialize OpenAI client only if API key is available
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-})
+}) : null
 
 export interface RoomAnalysis {
   room: string
@@ -52,6 +52,11 @@ interface AIRoomResponse {
 export class AIPhotoAnalysis {
   static async analyzeCleaningPhotos(images: File[]): Promise<QuoteEstimate> {
     try {
+      // Check if OpenAI is configured
+      if (!openai) {
+        throw new Error('AI service not configured. Please set OPENAI_API_KEY environment variable.')
+      }
+
       // Convert images to base64 for OpenAI Vision API
       const imagePromises = images.map(image => this.fileToBase64(image))
       const base64Images = await Promise.all(imagePromises)
@@ -222,6 +227,11 @@ export class AIPhotoAnalysis {
     safetyNotes: string[]
   }> {
     try {
+      // Check if OpenAI is configured
+      if (!openai) {
+        throw new Error('AI service not configured. Please set OPENAI_API_KEY environment variable.')
+      }
+
       const base64Images = await Promise.all(images.map(image => this.fileToBase64(image)))
 
       const prompt = `
