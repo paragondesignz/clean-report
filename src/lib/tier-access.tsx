@@ -32,7 +32,7 @@ export const TIER_FEATURES = {
       messaging: false,
       advancedTimeTracking: false,
       brandedReports: false,
-      recurringJobs: false,
+      recurringJobs: true, // Now available to all users
       apiAccess: false,
       prioritySupport: false,
       unlimitedClients: false,
@@ -81,8 +81,8 @@ export function useTierAccess(): { access: FeatureAccess; limits: TierLimits; is
     if (user.user_metadata?.role === 'sub_contractor') {
       userRole = 'sub_contractor'
       userTier = 'free' // Sub contractors always have free tier access
-    } else if (user.user_metadata?.subscription_tier === 'pro' || user.email === 'mark@paragondesign.co.nz') {
-      // Temporary: Force pro tier for the specified user
+    } else if (user.user_metadata?.subscription_tier === 'pro' || user.email === 'mark@paragondesign.co.nz' || user.email === 'caroline.lekstrom@hotmail.com') {
+      // Temporary: Force pro tier for specified users
       userRole = 'admin'
       userTier = 'pro'
     } else {

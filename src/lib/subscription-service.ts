@@ -25,13 +25,13 @@ export const SUBSCRIPTION_LIMITS: Record<SubscriptionTier, SubscriptionLimits> =
     maxClients: 5,
     maxJobs: 20,
     maxReports: 10,
-    maxRecurringJobs: 0,
+    maxRecurringJobs: -1, // Now unlimited for all users
     maxSupplies: 10,
     maxServiceTypes: 5,
     maxStaffMembers: 0,
     features: {
       timeTracking: false,
-      recurringJobs: false,
+      recurringJobs: true, // Now available to all users
       brandedReports: false,
       apiAccess: false,
       prioritySupport: false,
