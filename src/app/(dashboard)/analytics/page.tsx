@@ -12,7 +12,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  BarChart3,
   TrendingUp,
   TrendingDown,
   Users,
@@ -24,8 +23,6 @@ import {
   Package,
   FileText,
   Star,
-  MapPin,
-  Timer,
   Activity
 } from "lucide-react"
 import { getJobs, getClients, getReports, getSupplies, getDashboardStats } from "@/lib/supabase-client"
@@ -49,7 +46,7 @@ interface MetricCard {
   value: string | number
   change?: string
   changeType?: 'positive' | 'negative' | 'neutral'
-  icon: any
+  icon: React.ComponentType<{ className?: string }>
   description?: string
 }
 
@@ -132,8 +129,6 @@ export default function AnalyticsPage() {
     : 0
 
   const activeJobs = data.jobs.filter(j => j.status === 'in_progress').length
-  const scheduledJobs = data.jobs.filter(j => j.status === 'scheduled').length
-  const cancelledJobs = data.jobs.filter(j => j.status === 'cancelled').length
 
   // Time-based metrics (filtered by timeRange)
   const cutoffDate = new Date()

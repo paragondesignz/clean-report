@@ -181,7 +181,7 @@ export default function SubContractorsPage() {
   // Fetch sub contractors
   useEffect(() => {
     fetchSubContractors()
-  }, [])
+  }, [fetchSubContractors])
 
   const fetchSubContractors = async () => {
     try {
