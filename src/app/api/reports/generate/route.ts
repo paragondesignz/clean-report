@@ -120,13 +120,13 @@ export async function POST(request: NextRequest) {
       reportTasks: reportTasks
     }
 
-    // Generate PDF using server-side PDFKit
-    console.log('Generating PDF with PDFKit...')
-    const pdfBuffer = await generateServerPDF(reportData)
+    // Generate HTML report (avoiding PDFKit binary issues in Vercel)
+    console.log('Generating HTML report...')
+    const htmlContent = await generateServerPDF(reportData)
 
-    // Upload PDF to Supabase Storage
-    console.log('Uploading PDF to Supabase storage...')
-    const fileName = `reports/${jobId}/${Date.now()}-report.pdf`
+    // Upload HTML to Supabase Storage
+    console.log('Uploading HTML report to Supabase storage...')
+    const fileName = `reports/${jobId}/${Date.now()}-report.html`
     
     // Check if the reports bucket exists
     const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets()
@@ -138,8 +138,8 @@ export async function POST(request: NextRequest) {
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('reports')
-      .upload(fileName, pdfBuffer, {
-        contentType: 'application/pdf',
+      .upload(fileName, htmlContent, {
+        contentType: 'text/html',
         cacheControl: '3600'
       })
 
@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
         const { data: createBucket, error: createError } = await supabase.storage
           .createBucket('reports', {
             public: true,
-            allowedMimeTypes: ['application/pdf'],
+            allowedMimeTypes: ['text/html', 'application/pdf'],
             fileSizeLimit: 10485760 // 10MB
           })
         
@@ -170,8 +170,8 @@ export async function POST(request: NextRequest) {
         console.log('Retrying upload after creating bucket...')
         const { data: retryUpload, error: retryError } = await supabase.storage
           .from('reports')
-          .upload(fileName, pdfBuffer, {
-            contentType: 'application/pdf',
+          .upload(fileName, htmlContent, {
+            contentType: 'text/html',
             cacheControl: '3600'
           })
           
@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
       reportUrl: urlData.publicUrl,
       downloadUrl: urlData.publicUrl,
       reportData: reportData,
-      message: 'PDF report generated successfully!'
+      message: 'HTML report generated successfully! Use browser print or client-side PDF generation for PDF output.'
     })
 
   } catch (error) {

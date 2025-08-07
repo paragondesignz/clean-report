@@ -1,7 +1,5 @@
-// Server-side only PDF generator using PDFKit
-// This file should not be imported on the client side
-
-import PDFDocument from 'pdfkit'
+// Server-side PDF generator using HTML generation
+// This approach avoids binary dependencies and works better in serverless
 
 export interface ReportData {
   job: any
@@ -11,171 +9,285 @@ export interface ReportData {
   configuration: any
 }
 
-export async function generateServerPDF(reportData: ReportData): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    try {
-      console.log('Creating PDF document with PDFKit...')
-      const doc = new PDFDocument({
-        size: 'A4',
-        margins: { top: 50, bottom: 50, left: 50, right: 50 }
-      })
+export async function generateServerPDF(reportData: ReportData): Promise<string> {
+  console.log('Generating HTML report for server-side processing...')
+  
+  const { job, tasks, photos, notes, configuration } = reportData
+  
+  // For now, let's return the HTML content that can be processed differently
+  // This avoids the PDFKit binary dependency issue
+  const htmlContent = generateReportHTML(reportData)
+  
+  console.log('HTML report generated successfully')
+  return htmlContent
+}
 
-      const chunks: Buffer[] = []
-      doc.on('data', chunk => chunks.push(chunk))
-      doc.on('end', () => {
-        console.log('PDF generation completed, buffer size:', Buffer.concat(chunks).length)
-        resolve(Buffer.concat(chunks))
-      })
-      doc.on('error', (error) => {
-        console.error('PDF generation error:', error)
-        reject(error)
-      })
+function generateReportHTML(reportData: ReportData): string {
+  const { job, tasks, photos, notes, configuration } = reportData
+  
+  // Ensure we have at least basic job data
+  const jobData = job || { title: 'Untitled Job', client: { name: 'Unknown Client', address: 'No Address' } }
+  
+  return `
+  <!DOCTYPE html>
+  <html>
+  <head>
+      <meta charset="UTF-8">
+      <title>Job Report - ${jobData.title}</title>
+      <style>
+          ${getReportCSS(configuration)}
+      </style>
+  </head>
+  <body>
+      <div class="report">
+          <header class="report-header">
+              <h1>${configuration?.company_name || 'Your Company'}</h1>
+              <h2>Job Report: ${jobData.title || 'Untitled Job'}</h2>
+              <div class="report-meta">
+                  <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+                  <p><strong>Client:</strong> ${jobData.client?.name || 'N/A'}</p>
+                  <p><strong>Address:</strong> ${jobData.client?.address || 'N/A'}</p>
+              </div>
+          </header>
 
-      const { job, tasks, photos, notes, configuration } = reportData
+          <main class="report-content">
+              <section class="job-details">
+                  <h3>Job Details</h3>
+                  <div class="detail-grid">
+                      <div><strong>Status:</strong> ${jobData.status || 'N/A'}</div>
+                      <div><strong>Priority:</strong> ${jobData.priority || 'Normal'}</div>
+                      <div><strong>Scheduled:</strong> ${jobData.scheduled_date ? new Date(jobData.scheduled_date).toLocaleDateString() : 'N/A'}</div>
+                      <div><strong>Duration:</strong> ${jobData.estimated_duration ? `${jobData.estimated_duration} hours` : 'N/A'}</div>
+                  </div>
+                  ${jobData.description ? `<p class="job-description">${jobData.description}</p>` : ''}
+              </section>
 
-      console.log('Adding content to PDF...')
-      
-      // Add header
-      addHeader(doc, job, configuration)
-      
-      // Add job details
-      addJobDetails(doc, job)
-      
-      // Add tasks section
-      if (tasks && tasks.length > 0) {
-        addTasksSection(doc, tasks)
-      }
-      
-      // Add notes section
-      if (notes && notes.length > 0) {
-        addNotesSection(doc, notes)
-      }
-      
-      // Add footer
-      addFooter(doc, configuration)
+              ${tasks && tasks.length > 0 ? `
+              <section class="tasks-section">
+                  <h3>Tasks Completed</h3>
+                  <div class="tasks-grid">
+                      ${tasks.map((task: any) => `
+                          <div class="task-item">
+                              <h4>${task.name}</h4>
+                              <p class="task-status status-${task.status}">${task.status}</p>
+                              ${task.description ? `<p>${task.description}</p>` : ''}
+                              ${task.time_spent ? `<p class="time-spent">Time: ${task.time_spent} minutes</p>` : ''}
+                          </div>
+                      `).join('')}
+                  </div>
+              </section>
+              ` : ''}
 
-      console.log('Ending PDF document...')
-      doc.end()
-    } catch (error) {
-      console.error('Error in generateServerPDF:', error)
-      reject(error)
+              ${notes && notes.length > 0 ? `
+              <section class="notes-section">
+                  <h3>Notes</h3>
+                  <div class="notes-list">
+                      ${notes.map((note: any) => `
+                          <div class="note-item">
+                              <div class="note-meta">
+                                  <strong>${note.created_at ? new Date(note.created_at).toLocaleDateString() : ''}</strong>
+                              </div>
+                              <p>${note.content}</p>
+                          </div>
+                      `).join('')}
+                  </div>
+              </section>
+              ` : ''}
+
+              ${photos && photos.length > 0 ? `
+              <section class="photos-section">
+                  <h3>Photos</h3>
+                  <div class="photos-grid">
+                      ${photos.slice(0, 12).map((photo: any) => `
+                          <div class="photo-item">
+                              <img src="${photo.file_path}" alt="Job photo" />
+                              ${photo.description ? `<p>${photo.description}</p>` : ''}
+                          </div>
+                      `).join('')}
+                  </div>
+              </section>
+              ` : ''}
+          </main>
+
+          <footer class="report-footer">
+              <p>Generated on ${new Date().toLocaleDateString()} by ${configuration?.company_name || 'Your Company'}</p>
+              <div class="signature-area">
+                  <div class="signature-line">
+                      <p>Technician Signature: ________________________</p>
+                  </div>
+                  <div class="signature-line">
+                      <p>Customer Signature: ________________________</p>
+                  </div>
+              </div>
+          </footer>
+      </div>
+  </body>
+  </html>
+  `
+}
+
+function getReportCSS(config: any): string {
+  return `
+    @media print {
+      body { margin: 0; }
+      .report { page-break-inside: avoid; }
     }
-  })
-}
-
-function addHeader(doc: PDFKit.PDFDocument, job: any, config: any) {
-  try {
-    console.log('Adding header...')
-    doc.fontSize(20)
-      .fillColor(config?.primary_color || '#3B82F6')
-      .text(config?.company_name || 'Your Company', 50, 50)
-
-    doc.fontSize(16)
-      .fillColor('#000')
-      .text(`Job Report: ${job?.title || 'Untitled Job'}`, 50, 80)
-
-    doc.fontSize(10)
-      .text(`Generated: ${new Date().toLocaleDateString()}`, 50, 105)
-  } catch (error) {
-    console.error('Error in addHeader:', error)
-    throw error
-  }
-}
-
-function addJobDetails(doc: PDFKit.PDFDocument, job: any) {
-  try {
-    console.log('Adding job details...')
-    let yPos = 130
-
-    doc.fontSize(14).text('Job Details', 50, yPos)
-    yPos += 20
-
-    doc.fontSize(10)
-    doc.text(`Client: ${job?.client?.name || 'N/A'}`, 50, yPos)
-    yPos += 15
-    doc.text(`Address: ${job?.client?.address || 'N/A'}`, 50, yPos)
-    yPos += 15
-    doc.text(`Status: ${job?.status || 'N/A'}`, 50, yPos)
-    yPos += 15
-    doc.text(`Scheduled: ${job?.scheduled_date ? new Date(job.scheduled_date).toLocaleDateString() : 'N/A'}`, 50, yPos)
-
-    if (job?.description) {
-      yPos += 20
-      doc.text('Description:', 50, yPos)
-      yPos += 15
-      doc.text(job.description, 50, yPos, { width: 500 })
+    
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
     }
-  } catch (error) {
-    console.error('Error in addJobDetails:', error)
-    throw error
-  }
-}
-
-function addTasksSection(doc: PDFKit.PDFDocument, tasks: any[]) {
-  try {
-    console.log('Adding tasks section...')
-    let yPos = 300
-
-    doc.fontSize(14).text('Tasks Completed', 50, yPos)
-    yPos += 20
-
-    tasks.forEach((task, index) => {
-      if (yPos > 700) {
-        doc.addPage()
-        yPos = 50
-      }
-
-      doc.fontSize(12).text(`${index + 1}. ${task?.name || 'Unnamed Task'}`, 50, yPos)
-      yPos += 15
-      doc.fontSize(10).text(`Status: ${task?.status || 'Unknown'}`, 70, yPos)
-      yPos += 12
-
-      if (task?.description) {
-        doc.text(task.description, 70, yPos, { width: 450 })
-        yPos += 15
-      }
-      yPos += 10
-    })
-  } catch (error) {
-    console.error('Error in addTasksSection:', error)
-    throw error
-  }
-}
-
-function addNotesSection(doc: PDFKit.PDFDocument, notes: any[]) {
-  try {
-    console.log('Adding notes section...')
-    let yPos = 500
-
-    doc.fontSize(14).text('Notes', 50, yPos)
-    yPos += 20
-
-    notes.forEach(note => {
-      if (yPos > 700) {
-        doc.addPage()
-        yPos = 50
-      }
-
-      doc.fontSize(10)
-        .text(note?.created_at ? new Date(note.created_at).toLocaleDateString() : '', 50, yPos)
-      yPos += 12
-      doc.text(note?.content || 'No content', 50, yPos, { width: 500 })
-      yPos += 20
-    })
-  } catch (error) {
-    console.error('Error in addNotesSection:', error)
-    throw error
-  }
-}
-
-function addFooter(doc: PDFKit.PDFDocument, config: any) {
-  try {
-    console.log('Adding footer...')
-    doc.fontSize(8)
-      .fillColor('#666')
-      .text(`Generated by ${config?.company_name || 'Your Company'}`, 50, 750)
-  } catch (error) {
-    console.error('Error in addFooter:', error)
-    throw error
-  }
+    
+    .report-header {
+      text-align: center;
+      border-bottom: 3px solid ${config?.primary_color || '#3B82F6'};
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+    
+    .report-header h1 {
+      color: ${config?.primary_color || '#3B82F6'};
+      margin: 0;
+      font-size: 24px;
+    }
+    
+    .report-header h2 {
+      margin: 10px 0;
+      font-size: 18px;
+      color: #666;
+    }
+    
+    .report-meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin-top: 15px;
+    }
+    
+    .report-meta p {
+      margin: 5px 0;
+      font-size: 14px;
+    }
+    
+    section {
+      margin-bottom: 30px;
+    }
+    
+    h3 {
+      color: ${config?.primary_color || '#3B82F6'};
+      border-bottom: 2px solid #eee;
+      padding-bottom: 5px;
+      margin-bottom: 15px;
+    }
+    
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .job-description {
+      background: #f9f9f9;
+      padding: 15px;
+      border-left: 4px solid ${config?.primary_color || '#3B82F6'};
+      margin: 15px 0;
+    }
+    
+    .tasks-grid {
+      display: grid;
+      gap: 15px;
+    }
+    
+    .task-item {
+      background: #f9f9f9;
+      padding: 15px;
+      border-radius: 8px;
+      border-left: 4px solid ${config?.accent_color || '#10B981'};
+    }
+    
+    .task-item h4 {
+      margin: 0 0 10px 0;
+      color: #333;
+    }
+    
+    .task-status {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    
+    .status-completed { background: #d4edda; color: #155724; }
+    .status-in_progress { background: #fff3cd; color: #856404; }
+    .status-pending { background: #f8d7da; color: #721c24; }
+    
+    .time-spent {
+      font-style: italic;
+      color: #666;
+      margin-top: 10px;
+    }
+    
+    .notes-list {
+      display: grid;
+      gap: 15px;
+    }
+    
+    .note-item {
+      background: #f9f9f9;
+      padding: 15px;
+      border-radius: 8px;
+    }
+    
+    .note-meta {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    
+    .photos-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+    }
+    
+    .photo-item img {
+      width: 100%;
+      height: 150px;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+    
+    .photo-item p {
+      margin-top: 8px;
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .report-footer {
+      border-top: 2px solid #eee;
+      padding-top: 20px;
+      margin-top: 40px;
+      text-align: center;
+    }
+    
+    .signature-area {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      margin-top: 30px;
+    }
+    
+    .signature-line p {
+      border-bottom: 1px solid #333;
+      padding-bottom: 20px;
+      margin-bottom: 5px;
+    }
+  `
 }
