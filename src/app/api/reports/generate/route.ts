@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { AdvancedPDFGenerator } from '@/lib/pdf-generator-advanced'
+import { generateServerPDF } from '@/lib/pdf-generator-server'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -122,10 +122,20 @@ export async function POST(request: NextRequest) {
 
     // Generate PDF using server-side PDFKit
     console.log('Generating PDF with PDFKit...')
-    const pdfBuffer = await AdvancedPDFGenerator.generateServerPDF(reportData)
+    const pdfBuffer = await generateServerPDF(reportData)
 
     // Upload PDF to Supabase Storage
+    console.log('Uploading PDF to Supabase storage...')
     const fileName = `reports/${jobId}/${Date.now()}-report.pdf`
+    
+    // Check if the reports bucket exists
+    const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets()
+    console.log('Available storage buckets:', buckets?.map(b => b.name) || [])
+    
+    if (bucketsError) {
+      console.error('Error listing storage buckets:', bucketsError)
+    }
+
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('reports')
       .upload(fileName, pdfBuffer, {
@@ -135,7 +145,42 @@ export async function POST(request: NextRequest) {
 
     if (uploadError) {
       console.error('Error uploading PDF to storage:', uploadError)
-      throw new Error(`Failed to upload PDF: ${uploadError.message}`)
+      console.error('Upload error details:', {
+        message: uploadError.message,
+        statusCode: (uploadError as any).statusCode,
+        error: uploadError
+      })
+      
+      // If the bucket doesn't exist, try to create it
+      if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('bucket_not_found')) {
+        console.log('Attempting to create reports bucket...')
+        const { data: createBucket, error: createError } = await supabase.storage
+          .createBucket('reports', {
+            public: true,
+            allowedMimeTypes: ['application/pdf'],
+            fileSizeLimit: 10485760 // 10MB
+          })
+        
+        if (createError) {
+          console.error('Failed to create bucket:', createError)
+          throw new Error(`Failed to create storage bucket: ${createError.message}`)
+        }
+        
+        // Retry upload
+        console.log('Retrying upload after creating bucket...')
+        const { data: retryUpload, error: retryError } = await supabase.storage
+          .from('reports')
+          .upload(fileName, pdfBuffer, {
+            contentType: 'application/pdf',
+            cacheControl: '3600'
+          })
+          
+        if (retryError) {
+          throw new Error(`Failed to upload PDF after bucket creation: ${retryError.message}`)
+        }
+      } else {
+        throw new Error(`Failed to upload PDF: ${uploadError.message}`)
+      }
     }
 
     // Get public URL
