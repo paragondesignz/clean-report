@@ -42,6 +42,7 @@ import { PhotoSelector } from "@/components/reports/photo-selector"
 import { TaskSelector } from "@/components/reports/task-selector"
 import { ReportConfiguration } from "@/components/reports/report-configuration"
 import { ReportService } from "@/lib/report-service"
+import { ClientPDFGenerator } from '@/components/reports/pdf-generator-client'
 import type { Report, Job, Client, ReportWithJob, UserProfile } from "@/types/database"
 
 export default function ReportsPage() {
@@ -57,6 +58,8 @@ export default function ReportsPage() {
   const [customMessage, setCustomMessage] = useState("")
   const [showReportBuilder, setShowReportBuilder] = useState(false)
   const [showConfiguration, setShowConfiguration] = useState(false)
+  const [showFallbackPDF, setShowFallbackPDF] = useState(false)
+  const [fallbackReportData, setFallbackReportData] = useState<any>(null)
   const [currentStep, setCurrentStep] = useState<'select' | 'photos' | 'tasks' | 'generate'>('select')
 
   const fetchData = useCallback(async () => {
@@ -139,11 +142,29 @@ export default function ReportsPage() {
       window.open(reportUrl, '_blank')
     } catch (error) {
       console.error('Error generating report:', error)
-      toast({
-        title: "Error",
-        description: "Failed to generate report",
-        variant: "destructive"
-      })
+      
+      // Try to prepare fallback data for client-side generation
+      try {
+        const reportService = new ReportService(user!.id)
+        const reportData = await reportService.prepareReportData(selectedJob)
+        
+        setFallbackReportData(reportData)
+        setShowFallbackPDF(true)
+        setIsGenerateDialogOpen(false)
+        
+        toast({
+          title: "Server Generation Failed",
+          description: "Using alternative PDF generation methods...",
+          variant: "default"
+        })
+      } catch (fallbackError) {
+        console.error('Fallback data preparation failed:', fallbackError)
+        toast({
+          title: "Error",
+          description: "Failed to generate report. Please try again.",
+          variant: "destructive"
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -746,6 +767,40 @@ export default function ReportsPage() {
               type="button" 
               variant="outline" 
               onClick={() => setShowConfiguration(false)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fallback PDF Generation Dialog */}
+      <Dialog open={showFallbackPDF} onOpenChange={setShowFallbackPDF}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Alternative PDF Generation</DialogTitle>
+            <DialogDescription>
+              The server-side PDF generation failed. You can use these client-side alternatives to generate your report.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {fallbackReportData && (
+            <div className="py-4">
+              <ClientPDFGenerator 
+                reportData={fallbackReportData}
+                jobTitle={jobs.find(j => j.id === selectedJob)?.title || 'Job Report'}
+              />
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => {
+                setShowFallbackPDF(false)
+                setFallbackReportData(null)
+              }}
             >
               Close
             </Button>

@@ -135,7 +135,7 @@ export class ReportService {
     const { data: photos, error: photosError } = await supabase
       .from('photos')
       .select('*')
-      .eq('task_id', tasks.map(t => t.id))
+      .in('task_id', tasks?.map(t => t.id) || [])
 
     if (photosError) throw photosError
 
