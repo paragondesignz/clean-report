@@ -139,7 +139,26 @@ export default function ReportsPage() {
       fetchData() // Refresh the reports list
       
       // Open the report in a new tab
-      window.open(reportUrl, '_blank')
+      console.log('Opening report URL:', reportUrl)
+      
+      // Handle data URLs specially
+      if (reportUrl.startsWith('data:')) {
+        const newWindow = window.open('', '_blank')
+        if (newWindow) {
+          newWindow.document.write(atob(reportUrl.split(',')[1]))
+          newWindow.document.close()
+        } else {
+          // Fallback: download as file
+          const link = document.createElement('a')
+          link.href = reportUrl
+          link.download = `report-${Date.now()}.html`
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+        }
+      } else {
+        window.open(reportUrl, '_blank')
+      }
     } catch (error) {
       console.error('Error generating report:', error)
       
