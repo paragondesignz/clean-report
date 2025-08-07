@@ -98,14 +98,20 @@ export default function RecurringJobsPage() {
     e.preventDefault()
     
     try {
+      // Prepare data with proper null handling for optional date fields
+      const submitData = {
+        ...formData,
+        end_date: formData.end_date || null // Convert empty string to null
+      }
+      
       if (editingJob) {
-        await updateRecurringJob(editingJob.id, formData)
+        await updateRecurringJob(editingJob.id, submitData)
         toast({
           title: "Success",
           description: "Recurring job updated successfully"
         })
       } else {
-        await createRecurringJob(formData)
+        await createRecurringJob(submitData)
         toast({
           title: "Success",
           description: "Recurring job created successfully"
