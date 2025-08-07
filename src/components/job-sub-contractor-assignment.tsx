@@ -357,9 +357,9 @@ export function JobSubContractorAssignment({ jobId }: JobSubContractorAssignment
               <div key={assignment.id} className="flex items-center justify-between p-3 border rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
-                    {getStatusIcon(assignment.status)}
-                    <Badge className={getStatusColor(assignment.status)}>
-                      {getStatusText(assignment.status)}
+                    {assignment?.status && getStatusIcon(assignment.status)}
+                    <Badge className={assignment?.status ? getStatusColor(assignment.status) : 'bg-gray-100 text-gray-800'}>
+                      {assignment?.status ? getStatusText(assignment.status) : 'Unknown'}
                     </Badge>
                   </div>
                   <div>
@@ -370,7 +370,7 @@ export function JobSubContractorAssignment({ jobId }: JobSubContractorAssignment
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {assignment.status === 'assigned' && (
+                  {assignment?.status === 'assigned' && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -379,7 +379,7 @@ export function JobSubContractorAssignment({ jobId }: JobSubContractorAssignment
                       Accept
                     </Button>
                   )}
-                  {assignment.status === 'accepted' && (
+                  {assignment?.status === 'accepted' && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -388,7 +388,7 @@ export function JobSubContractorAssignment({ jobId }: JobSubContractorAssignment
                       Start
                     </Button>
                   )}
-                  {assignment.status === 'in_progress' && (
+                  {assignment?.status === 'in_progress' && (
                     <Button
                       size="sm"
                       variant="outline"

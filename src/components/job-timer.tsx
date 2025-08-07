@@ -176,9 +176,9 @@ export function JobTimer({ job, onJobUpdate }: JobTimerProps) {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  const canStart = job.status === 'scheduled' || job.status === 'in_progress'
-  const canPause = timerState?.isRunning && job.status === 'in_progress'
-  const canStop = timerState?.isRunning && job.status === 'in_progress'
+  const canStart = job?.status === 'scheduled' || job?.status === 'in_progress'
+  const canPause = timerState?.isRunning && job?.status === 'in_progress'
+  const canStop = timerState?.isRunning && job?.status === 'in_progress'
   const canResume = !timerState?.isRunning && job.timer_started_at && !job.timer_ended_at
 
   return (
@@ -283,12 +283,12 @@ export function JobTimer({ job, onJobUpdate }: JobTimerProps) {
         <div className="text-center">
           <Badge 
             variant={
-              job.status === 'completed' ? 'default' :
-              job.status === 'in_progress' ? 'secondary' :
+              job?.status === 'completed' ? 'default' :
+              job?.status === 'in_progress' ? 'secondary' :
               'outline'
             }
           >
-            {job.status.replace('_', ' ').toUpperCase()}
+            {job?.status ? job.status.replace('_', ' ').toUpperCase() : 'UNKNOWN'}
           </Badge>
         </div>
       </CardContent>

@@ -402,7 +402,7 @@ export class EnhancedPDFGenerator {
             </div>
             <div class="info-item">
               <span class="info-label">Status:</span>
-              <span class="info-value">${job.status.replace('_', ' ').toUpperCase()}</span>
+              <span class="info-value">${job?.status ? job.status.replace('_', ' ').toUpperCase() : 'UNKNOWN'}</span>
             </div>
           </div>
           

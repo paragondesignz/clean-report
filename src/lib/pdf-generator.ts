@@ -112,7 +112,7 @@ export class PDFGenerator {
     this.addDetailRow('Service Title', job.title)
     this.addDetailRow('Date', new Date(job.scheduled_date).toLocaleDateString())
     this.addDetailRow('Time', job.scheduled_time ? new Date(`2000-01-01T${job.scheduled_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Not specified')
-    this.addDetailRow('Status', job.status.replace('_', ' ').toUpperCase())
+    this.addDetailRow('Status', job?.status ? job.status.replace('_', ' ').toUpperCase() : 'UNKNOWN')
     
     if (job.description) {
       this.addDetailRow('Description', job.description, 12)
