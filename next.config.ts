@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
     // Disable TypeScript checking during build to allow deployment
     ignoreBuildErrors: true,
   },
+  // Disable image optimization for now to avoid issues
+  images: {
+    unoptimized: true,
+  },
 }
 
 export default nextConfig
