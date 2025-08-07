@@ -142,7 +142,7 @@ export default function JobsPage() {
   }
 
   const hasActiveTimer = (job: Job) => {
-    return job.timer_started_at && !job.timer_ended_at
+    return job?.timer_started_at && !job?.timer_ended_at
   }
 
   const getJobPriority = (job: JobWithClient) => {

@@ -292,13 +292,13 @@ export class TimerService {
   static initializeTimer(job: Job): void {
     const state: TimerState = {
       isRunning: false,
-      startTime: job.timer_started_at ? new Date(job.timer_started_at) : null,
+      startTime: job?.timer_started_at ? new Date(job.timer_started_at) : null,
       elapsedSeconds: 0,
       totalSeconds: job.total_time_seconds || 0
     }
 
     // If timer is currently running, start the interval
-    if (job.timer_started_at && !job.timer_ended_at) {
+    if (job?.timer_started_at && !job?.timer_ended_at) {
       state.isRunning = true
       state.startTime = new Date(job.timer_started_at)
       

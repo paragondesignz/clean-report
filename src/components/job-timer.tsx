@@ -179,7 +179,7 @@ export function JobTimer({ job, onJobUpdate }: JobTimerProps) {
   const canStart = job?.status === 'scheduled' || job?.status === 'in_progress'
   const canPause = timerState?.isRunning && job?.status === 'in_progress'
   const canStop = timerState?.isRunning && job?.status === 'in_progress'
-  const canResume = !timerState?.isRunning && job.timer_started_at && !job.timer_ended_at
+  const canResume = !timerState?.isRunning && job?.timer_started_at && !job?.timer_ended_at
 
   return (
     <Card>
@@ -260,7 +260,7 @@ export function JobTimer({ job, onJobUpdate }: JobTimerProps) {
 
         {/* Timer Status */}
         <div className="text-center text-sm text-muted-foreground">
-          {job.timer_started_at && (
+          {job?.timer_started_at && (
             <div className="flex items-center justify-center space-x-2">
               <Clock className="h-4 w-4" />
               <span>
@@ -269,7 +269,7 @@ export function JobTimer({ job, onJobUpdate }: JobTimerProps) {
             </div>
           )}
           
-          {job.timer_ended_at && (
+          {job?.timer_ended_at && (
             <div className="flex items-center justify-center space-x-2 mt-1">
               <Square className="h-4 w-4" />
               <span>
