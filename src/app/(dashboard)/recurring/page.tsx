@@ -455,8 +455,7 @@ export default function RecurringJobsPage() {
             label: 'Generate Instances',
             icon: Play,
             onClick: (row) => handleGenerateInstances(row.id),
-            variant: 'outline',
-            loading: generatingInstances === row.id
+            variant: 'outline'
           },
           {
             label: 'View Instances',
