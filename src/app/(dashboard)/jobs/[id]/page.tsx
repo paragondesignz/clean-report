@@ -806,9 +806,9 @@ export default function JobDetailsPage() {
                     <div>
                       <h3 className="font-medium text-gray-900">Status</h3>
                       <div className="flex items-center space-x-2 mt-1">
-                        {job?.status && getStatusIcon(job.status)}
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${job?.status ? getStatusColor(job.status) : 'bg-gray-100 text-gray-800'}`}>
-                          {job?.status ? job.status.replace('_', ' ') : 'Unknown'}
+                        {job && job.status && getStatusIcon(job.status)}
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${job && job.status ? getStatusColor(job.status) : 'bg-gray-100 text-gray-800'}`}>
+                          {job && job.status ? job.status.replace('_', ' ') : 'Unknown'}
                         </span>
                       </div>
                     </div>
@@ -1148,11 +1148,11 @@ export default function JobDetailsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center space-x-3">
-                {job?.status && getStatusIcon(job.status)}
+                {job && job.status && getStatusIcon(job.status)}
                 <div>
                   <h3 className="font-medium text-gray-900">Status</h3>
-                  <Badge className={job?.status ? getStatusColor(job.status) : 'bg-gray-100 text-gray-800'}>
-                    {job?.status ? job.status.replace('_', ' ') : 'Unknown'}
+                  <Badge className={job && job.status ? getStatusColor(job.status) : 'bg-gray-100 text-gray-800'}>
+                    {job && job.status ? job.status.replace('_', ' ') : 'Unknown'}
                   </Badge>
                 </div>
               </div>
