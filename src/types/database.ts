@@ -1307,18 +1307,6 @@ export interface SubContractorJobAssignment {
   admin_notes: string
 }
 
-export interface JobTimer {
-  id: string
-  job_id: string
-  sub_contractor_id: string
-  start_time: string
-  end_time?: string
-  duration_minutes?: number
-  status: 'running' | 'paused' | 'stopped'
-  notes: string
-  created_at: string
-  updated_at: string
-}
 
 export interface JobPhoto {
   id: string

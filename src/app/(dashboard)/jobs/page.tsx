@@ -134,16 +134,6 @@ export default function JobsPage() {
     }
   }
 
-  const formatTimerTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    const secs = seconds % 60
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-  }
-
-  const hasActiveTimer = (job: Job) => {
-    return job?.timer_started_at && !job?.timer_ended_at
-  }
 
   const getJobPriority = (job: JobWithClient) => {
     // Simple priority based on status and date
@@ -238,8 +228,6 @@ export default function JobsPage() {
     lastUpdated: getLastUpdated(job),
     description: job.description,
     clientEmail: job.client?.email || 'No email',
-    hasTimer: hasActiveTimer(job),
-    timerTime: job.total_time_seconds ? formatTimerTime(job.total_time_seconds) : null
   }))
 
   // Define columns for DataTable - optimized for better fit

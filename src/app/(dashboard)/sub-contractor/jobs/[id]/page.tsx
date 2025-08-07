@@ -14,9 +14,6 @@ import {
   Users, 
   CheckCircle,
   AlertCircle,
-  Play,
-  Pause,
-  Square as Stop,
   Camera,
   FileText,
   Phone,
@@ -27,7 +24,6 @@ import {
   Edit,
   Save,
   X,
-  Timer,
   Image,
   MessageSquare
 } from "lucide-react"
@@ -49,7 +45,6 @@ interface JobDetail {
   description: string
   tasks: JobTask[]
   photos: JobPhoto[]
-  timer: JobTimer
   admin_contact: {
     name: string
     phone: string
@@ -78,22 +73,11 @@ interface JobPhoto {
   uploaded_at: string
 }
 
-interface JobTimer {
-  id: string
-  status: 'running' | 'paused' | 'stopped'
-  start_time: string
-  end_time?: string
-  duration_minutes?: number
-  notes: string
-}
 
 export default function SubContractorJobDetail({ params }: { params: { id: string } }) {
   const { toast } = useToast()
   const [job, setJob] = useState<JobDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [timerRunning, setTimerRunning] = useState(false)
-  const [timerPaused, setTimerPaused] = useState(false)
-  const [elapsedTime, setElapsedTime] = useState(0)
   const [showPhotoDialog, setShowPhotoDialog] = useState(false)
   const [showTaskDialog, setShowTaskDialog] = useState(false)
   const [selectedTask, setSelectedTask] = useState<JobTask | null>(null)
@@ -101,7 +85,6 @@ export default function SubContractorJobDetail({ params }: { params: { id: strin
   const [photoType, setPhotoType] = useState<'before' | 'after' | 'general' | 'task_specific'>('general')
   const [taskNotes, setTaskNotes] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     // Simulate loading job details
@@ -178,12 +161,6 @@ export default function SubContractorJobDetail({ params }: { params: { id: strin
             uploaded_at: '2024-01-15T09:45:00Z'
           }
         ],
-        timer: {
-          id: '1',
-          status: 'running',
-          start_time: '2024-01-15T09:00:00Z',
-          notes: 'Started on time'
-        },
         admin_contact: {
           name: 'Mike Admin',
           phone: '(555) 987-6543',
@@ -195,64 +172,7 @@ export default function SubContractorJobDetail({ params }: { params: { id: strin
     }, 1000)
   }, [params.id])
 
-  useEffect(() => {
-    if (timerRunning && !timerPaused) {
-      timerIntervalRef.current = setInterval(() => {
-        setElapsedTime(prev => prev + 1)
-      }, 1000)
-    } else {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current)
-      }
-    }
 
-    return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current)
-      }
-    }
-  }, [timerRunning, timerPaused])
-
-  const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    const secs = seconds % 60
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-  }
-
-  const startTimer = () => {
-    setTimerRunning(true)
-    setTimerPaused(false)
-    toast({
-      title: "Timer Started",
-      description: "Job timer is now running",
-    })
-  }
-
-  const pauseTimer = () => {
-    setTimerPaused(true)
-    toast({
-      title: "Timer Paused",
-      description: "Job timer has been paused",
-    })
-  }
-
-  const resumeTimer = () => {
-    setTimerPaused(false)
-    toast({
-      title: "Timer Resumed",
-      description: "Job timer is now running again",
-    })
-  }
-
-  const stopTimer = () => {
-    setTimerRunning(false)
-    setTimerPaused(false)
-    toast({
-      title: "Timer Stopped",
-      description: `Job completed in ${formatTime(elapsedTime)}`,
-    })
-  }
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -400,50 +320,6 @@ export default function SubContractorJobDetail({ params }: { params: { id: strin
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Timer Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Timer className="h-5 w-5" />
-                <span>Job Timer</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center space-y-4">
-                <div className="text-4xl font-mono font-bold text-blue-600">
-                  {formatTime(elapsedTime)}
-                </div>
-                <div className="flex items-center justify-center space-x-2">
-                  {!timerRunning ? (
-                    <Button onClick={startTimer} size="lg">
-                      <Play className="h-4 w-4 mr-2" />
-                      Start Timer
-                    </Button>
-                  ) : timerPaused ? (
-                    <Button onClick={resumeTimer} size="lg">
-                      <Play className="h-4 w-4 mr-2" />
-                      Resume
-                    </Button>
-                  ) : (
-                    <Button onClick={pauseTimer} size="lg" variant="outline">
-                      <Pause className="h-4 w-4 mr-2" />
-                      Pause
-                    </Button>
-                  )}
-                  {timerRunning && (
-                    <Button onClick={stopTimer} size="lg" variant="destructive">
-                      <Stop className="h-4 w-4 mr-2" />
-                      Stop
-                    </Button>
-                  )}
-                </div>
-                <div className="text-sm text-gray-600">
-                  Estimated: {job.estimated_duration}h | 
-                  {job.actual_duration && ` Actual: ${job.actual_duration}h`}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* Tasks */}
           <Card>
