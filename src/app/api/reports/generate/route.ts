@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { generatePuppeteerPDF } from '@/lib/pdf-generator-puppeteer'
 import { generateServerPDF } from '@/lib/pdf-generator-server'
 
 const supabase = createClient(
@@ -120,45 +121,61 @@ export async function POST(request: NextRequest) {
       reportTasks: reportTasks
     }
 
-    // Generate HTML report (avoiding PDFKit binary issues in Vercel)
-    console.log('Generating HTML report...')
-    let htmlContent: string
+    // Try to generate PDF using Puppeteer first
+    console.log('Attempting PDF generation with Puppeteer...')
+    let pdfBuffer: Buffer | null = null
+    let pdfDataUrl: string | null = null
+
     try {
-      htmlContent = await generateServerPDF(reportData)
-      console.log('HTML generation successful, length:', htmlContent.length)
-    } catch (htmlError) {
-      console.error('HTML generation failed:', htmlError)
-      // Fallback to basic HTML if generation fails
-      htmlContent = `
-        <html>
-          <head><title>Job Report - ${reportData.job?.title || 'Untitled'}</title></head>
-          <body>
-            <h1>Job Report: ${reportData.job?.title || 'Untitled Job'}</h1>
-            <p>Generated: ${new Date().toISOString()}</p>
-            <p>Client: ${reportData.job?.client?.name || 'N/A'}</p>
-            <p>Status: ${reportData.job?.status || 'N/A'}</p>
-            <p>Note: Full report generation failed, this is a basic fallback.</p>
-          </body>
-        </html>
-      `
+      pdfBuffer = await generatePuppeteerPDF(reportData)
+      pdfDataUrl = `data:application/pdf;base64,${pdfBuffer.toString('base64')}`
+      console.log('PDF generation successful, size:', pdfBuffer.length)
+
+      return NextResponse.json({
+        success: true,
+        reportId: `pdf-${Date.now()}`,
+        reportUrl: pdfDataUrl,
+        downloadUrl: pdfDataUrl,
+        message: 'PDF report generated successfully!'
+      })
+
+    } catch (pdfError) {
+      console.error('Puppeteer PDF generation failed:', pdfError)
+      console.log('Falling back to HTML generation...')
+
+      // Fallback to HTML generation
+      let htmlContent: string
+      try {
+        htmlContent = await generateServerPDF(reportData)
+        console.log('HTML generation successful, length:', htmlContent.length)
+      } catch (htmlError) {
+        console.error('HTML generation also failed:', htmlError)
+        // Final fallback to basic HTML
+        htmlContent = `
+          <html>
+            <head><title>Job Report - ${reportData.job?.title || 'Untitled'}</title></head>
+            <body>
+              <h1>Job Report: ${reportData.job?.title || 'Untitled Job'}</h1>
+              <p>Generated: ${new Date().toISOString()}</p>
+              <p>Client: ${reportData.job?.client?.name || 'N/A'}</p>
+              <p>Status: ${reportData.job?.status || 'N/A'}</p>
+              <p>Note: PDF generation failed, showing basic HTML fallback.</p>
+            </body>
+          </html>
+        `
+      }
+
+      // Create a data URL for the HTML content
+      const htmlDataUrl = `data:text/html;base64,${Buffer.from(htmlContent).toString('base64')}`
+
+      return NextResponse.json({
+        success: true,
+        reportId: `html-${Date.now()}`,
+        reportUrl: htmlDataUrl,
+        downloadUrl: htmlDataUrl,
+        message: 'PDF generation failed. Showing HTML report instead.'
+      })
     }
-
-    // For now, skip storage and return the HTML content directly
-    // This will help us identify if the issue is with storage or HTML generation
-    console.log('Skipping storage upload for debugging, returning HTML directly')
-    
-    // Create a data URL for the HTML content
-    const htmlDataUrl = `data:text/html;base64,${Buffer.from(htmlContent).toString('base64')}`
-
-    return NextResponse.json({
-      success: true,
-      reportId: `temp-${Date.now()}`,
-      reportUrl: htmlDataUrl,
-      downloadUrl: htmlDataUrl,
-      reportData: reportData,
-      htmlContent: htmlContent,
-      message: 'HTML report generated successfully! Use browser print or client-side PDF generation for PDF output.'
-    })
 
   } catch (error) {
     console.error('Error generating report:', error)

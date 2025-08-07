@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# deployment and cleanup files
+deployment/
+DATABASE_CLEANUP_SUMMARY.md
+cleanup-*.sql
+cleanup-*.js
+src/types/database-clean.ts
+src/components/ui/usage-chart.tsx
+src/lib/usage-statistics.ts

@@ -143,18 +143,34 @@ export default function ReportsPage() {
       
       // Handle data URLs specially
       if (reportUrl.startsWith('data:')) {
-        const newWindow = window.open('', '_blank')
-        if (newWindow) {
-          newWindow.document.write(atob(reportUrl.split(',')[1]))
-          newWindow.document.close()
-        } else {
-          // Fallback: download as file
+        if (reportUrl.startsWith('data:application/pdf')) {
+          // For PDF data URLs, trigger download
           const link = document.createElement('a')
           link.href = reportUrl
-          link.download = `report-${Date.now()}.html`
+          link.download = `report-${Date.now()}.pdf`
           document.body.appendChild(link)
           link.click()
           document.body.removeChild(link)
+          
+          toast({
+            title: "PDF Downloaded",
+            description: "Your PDF report has been downloaded successfully!",
+          })
+        } else {
+          // For HTML data URLs, open in new window
+          const newWindow = window.open('', '_blank')
+          if (newWindow) {
+            newWindow.document.write(atob(reportUrl.split(',')[1]))
+            newWindow.document.close()
+          } else {
+            // Fallback: download as HTML file
+            const link = document.createElement('a')
+            link.href = reportUrl
+            link.download = `report-${Date.now()}.html`
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+          }
         }
       } else {
         window.open(reportUrl, '_blank')

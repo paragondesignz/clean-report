@@ -3,6 +3,14 @@
   "functions": {
     "src/app/api/**/*.ts": {
       "maxDuration": 30
+    },
+    "src/app/api/reports/generate/route.ts": {
+      "maxDuration": 60
+    }
+  },
+  "build": {
+    "env": {
+      "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true"
     }
   }
 }
