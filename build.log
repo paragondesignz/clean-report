@@ -1,0 +1,93 @@
+
+> clean-report@0.1.0 build
+> next build
+
+   ▲ Next.js 15.4.5
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 10.0s
+   Skipping validation of types
+   Skipping linting
+   Collecting page data ...
+   Generating static pages (0/50) ...
+   Generating static pages (12/50) 
+   Generating static pages (24/50) 
+   Generating static pages (37/50) 
+ ✓ Generating static pages (50/50)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                          Size  First Load JS
+┌ ○ /                                             7.64 kB         161 kB
+├ ○ /_not-found                                      1 kB         101 kB
+├ ○ /ai-tools                                     17.7 kB         189 kB
+├ ○ /analytics                                    5.84 kB         189 kB
+├ ƒ /api/ai/photo-analysis                          202 B         100 kB
+├ ƒ /api/ai/quote-generator                         202 B         100 kB
+├ ƒ /api/ai/smart-scheduler                         202 B         100 kB
+├ ƒ /api/calendar/feed/[userId]                     202 B         100 kB
+├ ƒ /api/calendar/push-jobs                         202 B         100 kB
+├ ƒ /api/calendar/sync                              202 B         100 kB
+├ ƒ /api/calendar/test                              202 B         100 kB
+├ ƒ /api/health                                     202 B         100 kB
+├ ƒ /api/mobile-jobs                                202 B         100 kB
+├ ƒ /api/mobile-jobs/[id]                           202 B         100 kB
+├ ƒ /api/mobile-jobs/[id]/notes                     202 B         100 kB
+├ ƒ /api/mobile-jobs/[id]/photos                    202 B         100 kB
+├ ƒ /api/mobile-jobs/[id]/tasks/[taskId]            202 B         100 kB
+├ ƒ /api/reports/generate                           202 B         100 kB
+├ ƒ /api/send-mobile-invitation                     202 B         100 kB
+├ ƒ /api/stripe/connect                             202 B         100 kB
+├ ƒ /api/stripe/test-payment                        202 B         100 kB
+├ ƒ /api/stripe/webhook                             202 B         100 kB
+├ ƒ /api/sub-contractors                            202 B         100 kB
+├ ƒ /api/sub-contractors/[id]                       202 B         100 kB
+├ ƒ /api/sub-contractors/assign-job                 202 B         100 kB
+├ ƒ /api/sub-contractors/assignments/[id]           202 B         100 kB
+├ ƒ /api/sub-contractors/debug                      202 B         100 kB
+├ ƒ /api/sub-contractors/job-assignments/[jobId]    202 B         100 kB
+├ ƒ /api/sub-contractors/test                       202 B         100 kB
+├ ƒ /api/twilio/test-connection                     202 B         100 kB
+├ ƒ /api/twilio/test-sms                            202 B         100 kB
+├ ○ /booking-requests                             2.57 kB         190 kB
+├ ƒ /booking/[token]                              14.1 kB         172 kB
+├ ○ /calendar                                     5.73 kB         164 kB
+├ ○ /clients                                      2.46 kB         196 kB
+├ ƒ /clients/[id]                                 4.36 kB         178 kB
+├ ○ /clients/new                                  2.94 kB         158 kB
+├ ○ /dashboard                                    9.18 kB         171 kB
+├ ƒ /feedback/[token]                             5.32 kB         161 kB
+├ ○ /help                                          4.4 kB         114 kB
+├ ○ /jobs                                         3.48 kB         194 kB
+├ ƒ /jobs/[id]                                    10.7 kB         204 kB
+├ ○ /jobs/new                                      3.7 kB         187 kB
+├ ○ /login                                        4.21 kB         158 kB
+├ ○ /messaging                                    10.7 kB         161 kB
+├ ƒ /mobile-job/[id]                              9.26 kB         164 kB
+├ ○ /mobile-jobs                                  5.68 kB         115 kB
+├ ○ /recurring                                    5.94 kB         200 kB
+├ ○ /recurring/new                                4.83 kB         188 kB
+├ ○ /reports                                      17.4 kB         321 kB
+├ ƒ /reports/[id]                                 6.32 kB         271 kB
+├ ○ /reports/new                                  3.68 kB         187 kB
+├ ○ /service-types                                4.06 kB         163 kB
+├ ƒ /service-types/edit/[id]                      3.27 kB         162 kB
+├ ○ /service-types/new                            3.08 kB         162 kB
+├ ○ /settings                                     30.8 kB         207 kB
+├ ○ /signup                                       4.42 kB         158 kB
+├ ○ /sub-contractor/dashboard                     5.22 kB         118 kB
+├ ƒ /sub-contractor/jobs/[id]                     10.4 kB         135 kB
+├ ○ /sub-contractors                              8.52 kB         171 kB
+├ ○ /supplies                                     4.23 kB         194 kB
+├ ○ /supplies/new                                 3.08 kB         158 kB
+└ ○ /test-maps                                    6.53 kB         116 kB
++ First Load JS shared by all                      100 kB
+  ├ chunks/4bd1b696-cc729d47eba2cee4.js           54.1 kB
+  ├ chunks/5964-40978821a2ce41e4.js               43.9 kB
+  └ other shared chunks (total)                   2.07 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
