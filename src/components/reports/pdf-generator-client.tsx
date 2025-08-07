@@ -151,7 +151,10 @@ export function ClientPDFGenerator({ reportData, jobTitle = 'Job Report' }: Clie
 
 // Local PDF generation functions to avoid server-side dependencies
 function generateClientPDF(reportData: any, jobTitle: string): jsPDF {
-  const { job, tasks, photos, notes, configuration } = reportData
+  const { job, tasks, photos, notes, configuration } = reportData || {}
+  
+  // Ensure we have at least basic job data
+  const jobData = job || { title: jobTitle, client: { name: 'Unknown Client', address: 'No Address' } }
 
   const doc = new jsPDF({
     format: 'a4',
@@ -169,11 +172,11 @@ function generateClientPDF(reportData: any, jobTitle: string): jsPDF {
   // Job Title
   doc.setFontSize(16)
   doc.setTextColor(0, 0, 0)
-  doc.text(`Job Report: ${job?.title || 'Untitled Job'}`, 20, yPosition)
+  doc.text(`Job Report: ${jobData.title || 'Untitled Job'}`, 20, yPosition)
   yPosition += 10
 
   // Job Details
-  yPosition = addJobDetailsClient(doc, job, yPosition)
+  yPosition = addJobDetailsClient(doc, jobData, yPosition)
   
   // Tasks Section
   if (tasks && tasks.length > 0) {
@@ -271,7 +274,10 @@ function addFooterClient(doc: jsPDF, config: any) {
 }
 
 function generateHTMLContent(reportData: any): string {
-  const { job, tasks, photos, notes, configuration } = reportData
+  const { job, tasks, photos, notes, configuration } = reportData || {}
+  
+  // Ensure we have at least basic job data
+  const jobData = job || { title: 'Untitled Job', client: { name: 'Unknown Client', address: 'No Address' } }
   
   return `
   <!DOCTYPE html>
@@ -287,11 +293,11 @@ function generateHTMLContent(reportData: any): string {
       <div class="report">
           <header class="report-header">
               <h1>${configuration?.company_name || 'Your Company'}</h1>
-              <h2>Job Report: ${job?.title || 'Untitled Job'}</h2>
+              <h2>Job Report: ${jobData.title || 'Untitled Job'}</h2>
               <div class="report-meta">
                   <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-                  <p><strong>Client:</strong> ${job?.client?.name || 'N/A'}</p>
-                  <p><strong>Address:</strong> ${job?.client?.address || 'N/A'}</p>
+                  <p><strong>Client:</strong> ${jobData.client?.name || 'N/A'}</p>
+                  <p><strong>Address:</strong> ${jobData.client?.address || 'N/A'}</p>
               </div>
           </header>
 
@@ -299,12 +305,12 @@ function generateHTMLContent(reportData: any): string {
               <section class="job-details">
                   <h3>Job Details</h3>
                   <div class="detail-grid">
-                      <div><strong>Status:</strong> ${job?.status || 'N/A'}</div>
-                      <div><strong>Priority:</strong> ${job?.priority || 'Normal'}</div>
-                      <div><strong>Scheduled:</strong> ${job?.scheduled_date ? new Date(job.scheduled_date).toLocaleDateString() : 'N/A'}</div>
-                      <div><strong>Duration:</strong> ${job?.estimated_duration ? `${job.estimated_duration} hours` : 'N/A'}</div>
+                      <div><strong>Status:</strong> ${jobData.status || 'N/A'}</div>
+                      <div><strong>Priority:</strong> ${jobData.priority || 'Normal'}</div>
+                      <div><strong>Scheduled:</strong> ${jobData.scheduled_date ? new Date(jobData.scheduled_date).toLocaleDateString() : 'N/A'}</div>
+                      <div><strong>Duration:</strong> ${jobData.estimated_duration ? `${jobData.estimated_duration} hours` : 'N/A'}</div>
                   </div>
-                  ${job?.description ? `<p class="job-description">${job.description}</p>` : ''}
+                  ${jobData.description ? `<p class="job-description">${jobData.description}</p>` : ''}
               </section>
 
               ${tasks && tasks.length > 0 ? `
