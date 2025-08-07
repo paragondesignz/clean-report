@@ -148,17 +148,55 @@ export class ReportService {
 
     if (notesError) throw notesError
 
-    // Get report configuration
-    const configuration = await this.getReportConfiguration()
+    // Get report configuration (handle missing table gracefully)
+    let configuration
+    try {
+      configuration = await this.getReportConfiguration()
+    } catch (error) {
+      console.log('Report configuration table not found, using default configuration')
+      configuration = {
+        company_name: 'Your Company',
+        primary_color: '#3B82F6',
+        secondary_color: '#1F2937',
+        accent_color: '#10B981',
+        font_family: 'Inter',
+        include_company_logo: true,
+        include_company_colors: true,
+        include_photos: true,
+        include_tasks: true,
+        include_notes: true,
+        include_timer_data: true,
+        photo_layout: 'grid',
+        max_photos_per_report: 20,
+        report_template: 'standard',
+        custom_header_text: null,
+        custom_footer_text: null
+      }
+    }
 
-    // Get or create report photos
-    const reportPhotos = await this.getOrCreateReportPhotos(jobId, photos)
+    // Get or create report photos (handle missing table gracefully)
+    let reportPhotos = []
+    try {
+      reportPhotos = await this.getOrCreateReportPhotos(jobId, photos)
+    } catch (error) {
+      console.log('Report photos table not found, using empty array')
+    }
 
-    // Get or create report tasks
-    const reportTasks = await this.getOrCreateReportTasks(jobId, tasks)
+    // Get or create report tasks (handle missing table gracefully)
+    let reportTasks = []
+    try {
+      reportTasks = await this.getOrCreateReportTasks(jobId, tasks)
+    } catch (error) {
+      console.log('Report tasks table not found, using empty array')
+    }
 
-    // Get timer data if available
-    const timerData = await this.getTimerData(jobId)
+    // Get timer data if available (handle missing table gracefully)
+    let timerData = null
+    try {
+      timerData = await this.getTimerData(jobId)
+    } catch (error) {
+      console.log('Timer data not available')
+    }
 
     return {
       job,
