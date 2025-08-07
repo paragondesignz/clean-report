@@ -115,7 +115,7 @@ export default function AnalyticsPage() {
   if (!data) return null
 
   // Calculate metrics
-  const totalRevenue = data.jobs.reduce((sum, job) => {
+  const totalRevenue = data.jobs.reduce((sum) => {
     // Mock revenue calculation - replace with actual pricing logic
     return sum + (Math.random() * 200 + 50)
   }, 0)

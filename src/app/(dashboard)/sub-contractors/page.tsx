@@ -180,66 +180,68 @@ export default function SubContractorsPage() {
 
   // Fetch sub contractors
   useEffect(() => {
-    fetchSubContractors()
-  }, [fetchSubContractors])
-
-  const fetchSubContractors = async () => {
-    try {
-      setLoading(true)
-      console.log('Fetching sub contractors...')
-      
-      // First try the debug endpoint to see if API is working
+    const fetchData = async () => {
       try {
-        const debugResponse = await fetch('/api/sub-contractors/debug')
-        console.log('Debug endpoint status:', debugResponse.status)
-        if (debugResponse.ok) {
-          const debugData = await debugResponse.json()
-          console.log('Debug endpoint response:', debugData)
-        }
-      } catch (debugError) {
-        console.log('Debug endpoint failed:', debugError)
-      }
-      
-      const response = await fetch('/api/sub-contractors')
-      console.log('Response status:', response.status)
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        console.error('API Error:', errorData)
+        setLoading(true)
+        console.log('Fetching sub contractors...')
         
-        if (response.status === 401) {
-          throw new Error('Please log in to access sub contractors')
-        } else if (errorData.code === 'DATABASE_ERROR' && errorData.details?.includes('relation "sub_contractors" does not exist')) {
-          throw new Error('Database tables not set up. Please run the SQL script in Supabase.')
-        } else {
-          throw new Error(errorData.error || errorData.details || `HTTP ${response.status}: Failed to fetch sub contractors`)
+        // First try the debug endpoint to see if API is working
+        try {
+          const debugResponse = await fetch('/api/sub-contractors/debug')
+          console.log('Debug endpoint status:', debugResponse.status)
+          if (debugResponse.ok) {
+            const debugData = await debugResponse.json()
+            console.log('Debug endpoint response:', debugData)
+          }
+        } catch (debugError) {
+          console.log('Debug endpoint failed:', debugError)
         }
+        
+        const response = await fetch('/api/sub-contractors')
+        console.log('Response status:', response.status)
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          console.error('API Error:', errorData)
+          
+          if (response.status === 401) {
+            throw new Error('Please log in to access sub contractors')
+          } else if (errorData.code === 'DATABASE_ERROR' && errorData.details?.includes('relation "sub_contractors" does not exist')) {
+            throw new Error('Database tables not set up. Please run the SQL script in Supabase.')
+          } else {
+            throw new Error(errorData.error || errorData.details || `HTTP ${response.status}: Failed to fetch sub contractors`)
+          }
+        }
+        
+        const data = await response.json()
+        console.log('Fetched data:', data)
+        setSubContractors(data)
+      } catch (error) {
+        console.error('Error fetching sub contractors:', error)
+        
+        // Check if it's a network error (offline)
+        if (error instanceof TypeError && error.message.includes('fetch')) {
+          toast({
+            title: "Network Error",
+            description: "You appear to be offline. Please check your internet connection.",
+            variant: "destructive"
+          })
+        } else {
+          toast({
+            title: "Error",
+            description: error instanceof Error ? error.message : "Failed to load sub contractors",
+            variant: "destructive"
+          })
+        }
+      } finally {
+        setLoading(false)
       }
-      
-      const data = await response.json()
-      console.log('Fetched data:', data)
-      setSubContractors(data)
-    } catch (error) {
-      console.error('Error fetching sub contractors:', error)
-      
-      // Check if it's a network error (offline)
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        toast({
-          title: "Network Error",
-          description: "You appear to be offline. Please check your internet connection.",
-          variant: "destructive"
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: error instanceof Error ? error.message : "Failed to load sub contractors",
-          variant: "destructive"
-        })
-      }
-    } finally {
-      setLoading(false)
     }
-  }
+    
+    fetchData()
+  }, [])
+
+
 
   const handleAddSubContractor = async () => {
     try {

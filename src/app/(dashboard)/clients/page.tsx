@@ -153,7 +153,7 @@ export default function ClientsPage() {
       label: 'Client',
       sortable: true,
       width: '300px',
-      render: (value: string, row: any) => (
+      render: (value: string, row: Client) => (
         <div className="flex items-center space-x-2 min-w-0">
           <div className="flex-shrink-0">
             {row.clientIcon}
@@ -173,7 +173,7 @@ export default function ClientsPage() {
       label: 'Contact',
       sortable: true,
       width: '160px',
-      render: (value: string, row: any) => (
+      render: (value: string, row: Client) => (
         <div className="min-w-0">
           <p className="text-sm font-medium flex items-center">
             <Phone className="w-3 h-3 mr-1 text-muted-foreground" />
@@ -202,7 +202,7 @@ export default function ClientsPage() {
       label: 'Jobs',
       sortable: true,
       width: '100px',
-      render: (value: string, row: any) => (
+      render: (value: string, row: Client) => (
         <div className="text-sm">
           <div className="font-medium text-green-600">{value}</div>
           <div className="text-muted-foreground text-xs">Completed/Total</div>

@@ -4,10 +4,10 @@ import Stripe from 'stripe'
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
 
-// Initialize Stripe client
-const stripe = new Stripe(STRIPE_SECRET_KEY!, {
+// Initialize Stripe client only if secret key is available
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, {
   apiVersion: '2023-10-16',
-})
+}) : null
 
 // Types for Stripe integration
 export interface StripeConnection {
@@ -65,6 +65,10 @@ class StripeIntegration {
       transfers?: { requested: boolean }
     }
   }): Promise<Stripe.Account> {
+    if (!stripe) {
+      throw new Error('Stripe is not configured. Please set STRIPE_SECRET_KEY environment variable.')
+    }
+    
     try {
       const account = await stripe.accounts.create({
         type: accountData.type,
