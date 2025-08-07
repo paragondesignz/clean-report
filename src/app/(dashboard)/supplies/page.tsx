@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -8,15 +8,16 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, Search, Edit, Trash2, Package, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Package, AlertTriangle, TrendingUp, TrendingDown, Minus } from "lucide-react"
 import { getSupplies, createSupply, updateSupply, deleteSupply } from "@/lib/supabase-client"
+import { DataTable } from "@/components/ui/data-table"
+import { Badge } from "@/components/ui/badge"
 import type { Supply } from "@/types/database"
 
 export default function SuppliesPage() {
   const { toast } = useToast()
   const [supplies, setSupplies] = useState<Supply[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [editingSupply, setEditingSupply] = useState<Supply | null>(null)
   const [formData, setFormData] = useState({
@@ -27,11 +28,7 @@ export default function SuppliesPage() {
     unit: ""
   })
 
-  useEffect(() => {
-    fetchSupplies()
-  }, [])
-
-  const fetchSupplies = async () => {
+  const fetchSupplies = useCallback(async () => {
     try {
       setLoading(true)
       const data = await getSupplies()
@@ -46,7 +43,11 @@ export default function SuppliesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
+
+  useEffect(() => {
+    fetchSupplies()
+  }, [fetchSupplies])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -141,11 +142,26 @@ export default function SuppliesPage() {
     })
   }
 
-  const filteredSupplies = supplies.filter(supply =>
-    supply.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    supply.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    supply.unit.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const getStockStatus = (supply: Supply) => {
+    if (supply.current_stock === 0) return 'Out of Stock'
+    if (supply.current_stock <= supply.low_stock_threshold) return 'Low Stock'
+    return 'In Stock'
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Out of Stock': return 'bg-red-100 text-red-800'
+      case 'Low Stock': return 'bg-yellow-100 text-yellow-800'
+      case 'In Stock': return 'bg-green-100 text-green-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getStockIcon = (supply: Supply) => {
+    if (supply.current_stock === 0) return <AlertTriangle className="h-4 w-4 text-red-600" />
+    if (supply.current_stock <= supply.low_stock_threshold) return <AlertTriangle className="h-4 w-4 text-yellow-600" />
+    return <Package className="h-4 w-4 text-green-600" />
+  }
 
   const stats = {
     total: supplies.length,
@@ -164,24 +180,168 @@ export default function SuppliesPage() {
     )
   }
 
+  // Prepare data for DataTable
+  const tableData = supplies.map(supply => ({
+    id: supply.id,
+    name: supply.name,
+    description: supply.description || '',
+    currentStock: supply.current_stock,
+    unit: supply.unit,
+    lowStockThreshold: supply.low_stock_threshold,
+    status: getStockStatus(supply),
+    stockDisplay: `${supply.current_stock} ${supply.unit}`,
+    thresholdDisplay: `${supply.low_stock_threshold} ${supply.unit}`,
+    stockIcon: getStockIcon(supply),
+    supply: supply
+  }))
+
+  // Define columns for DataTable
+  const columns = [
+    {
+      key: 'name',
+      label: 'Supply',
+      sortable: true,
+      width: '300px',
+      render: (value: string, row: any) => (
+        <div className="flex items-center space-x-2 min-w-0">
+          <div className="flex items-center justify-center w-6 h-6 bg-primary/10 rounded-md flex-shrink-0">
+            {row.stockIcon}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium truncate text-sm">{value}</p>
+            <p className="text-xs text-muted-foreground truncate max-w-[200px]">{row.description || 'No description'}</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      key: 'stockDisplay',
+      label: 'Current Stock',
+      sortable: true,
+      width: '140px',
+      render: (value: string, row: any) => (
+        <div className="text-sm">
+          <div className="font-medium">{value}</div>
+          <div className="text-muted-foreground text-xs">Available</div>
+        </div>
+      )
+    },
+    {
+      key: 'thresholdDisplay',
+      label: 'Low Stock Alert',
+      sortable: true,
+      width: '140px',
+      render: (value: string) => (
+        <div className="text-sm">
+          <div className="font-medium">{value}</div>
+          <div className="text-muted-foreground text-xs">Threshold</div>
+        </div>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      sortable: true,
+      width: '120px',
+      render: (value: string) => (
+        <Badge className={getStatusColor(value)} variant="outline">
+          {value}
+        </Badge>
+      )
+    }
+  ]
+
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Supplies</h1>
-          <p className="text-gray-600">Manage your cleaning supplies and inventory</p>
-        </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => {
-              setEditingSupply(null)
-              resetForm()
-            }}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Supply
-            </Button>
-          </DialogTrigger>
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Supplies</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total}</div>
+            <p className="text-xs text-muted-foreground">
+              In inventory
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.lowStock}</div>
+            <p className="text-xs text-muted-foreground">
+              Need restocking
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.outOfStock}</div>
+            <p className="text-xs text-muted-foreground">
+              Need immediate attention
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* DataTable */}
+      <DataTable
+        title="Supplies"
+        description="Manage your cleaning supplies and inventory"
+        data={tableData}
+        columns={columns}
+        addButton={{
+          label: "Add Supply",
+          icon: Plus,
+          onClick: () => {
+            setEditingSupply(null)
+            resetForm()
+            setIsCreateDialogOpen(true)
+          }
+        }}
+        onDelete={handleDelete}
+        searchPlaceholder="Search supplies by name, description, or unit..."
+        filterOptions={[
+          { key: 'status', label: 'Status', options: [
+            { value: 'In Stock', label: 'In Stock' },
+            { value: 'Low Stock', label: 'Low Stock' },
+            { value: 'Out of Stock', label: 'Out of Stock' }
+          ]}
+        ]}
+        customActions={[
+          {
+            label: 'Edit',
+            icon: Edit,
+            onClick: (row) => handleEdit(row.supply)
+          },
+          {
+            label: 'Decrease Stock',
+            icon: Minus,
+            onClick: (row) => handleStockAdjustment(row.supply, -1),
+            show: (row) => row.currentStock > 0
+          },
+          {
+            label: 'Increase Stock',
+            icon: Plus,
+            onClick: (row) => handleStockAdjustment(row.supply, 1)
+          }
+        ]}
+      />
+
+      {/* Add/Edit Supply Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>{editingSupply ? 'Edit Supply' : 'Add New Supply'}</DialogTitle>
@@ -257,173 +417,6 @@ export default function SuppliesPage() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Supplies</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground">
-              In inventory
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-yellow-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.lowStock}</div>
-            <p className="text-xs text-muted-foreground">
-              Need restocking
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.outOfStock}</div>
-            <p className="text-xs text-muted-foreground">
-              Need immediate attention
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-        <Input
-          placeholder="Search supplies by name, description, or unit..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
-      </div>
-
-      {/* Supplies Grid */}
-      {filteredSupplies.length === 0 ? (
-        <Card>
-          <CardContent className="text-center py-12">
-            <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <Package className="h-6 w-6 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchTerm ? 'No supplies found' : 'No supplies yet'}
-            </h3>
-            <p className="text-gray-600 mb-4">
-              {searchTerm 
-                ? 'Try adjusting your search terms'
-                : 'Get started by adding your first cleaning supply'
-              }
-            </p>
-            {!searchTerm && (
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add First Supply
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredSupplies.map((supply) => {
-            const isLowStock = supply.current_stock <= supply.low_stock_threshold
-            const isOutOfStock = supply.current_stock === 0
-            
-            return (
-              <Card key={supply.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Package className={`h-5 w-5 ${
-                        isOutOfStock ? 'text-red-600' : 
-                        isLowStock ? 'text-yellow-600' : 'text-green-600'
-                      }`} />
-                      <CardTitle className="text-lg">{supply.name}</CardTitle>
-                    </div>
-                    <div className="flex space-x-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(supply)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(supply.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {supply.description && (
-                    <p className="text-sm text-gray-600 line-clamp-2">{supply.description}</p>
-                  )}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Current Stock:</span>
-                      <span className={`font-medium ${
-                        isOutOfStock ? 'text-red-600' : 
-                        isLowStock ? 'text-yellow-600' : 'text-green-600'
-                      }`}>
-                        {supply.current_stock} {supply.unit}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Low Stock Alert:</span>
-                      <span className="text-gray-900">{supply.low_stock_threshold} {supply.unit}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between pt-2">
-                    <div className="flex space-x-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleStockAdjustment(supply, -1)}
-                        disabled={supply.current_stock === 0}
-                      >
-                        <TrendingDown className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleStockAdjustment(supply, 1)}
-                      >
-                        <TrendingUp className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      isOutOfStock 
-                        ? 'text-red-600 bg-red-100' 
-                        : isLowStock 
-                        ? 'text-yellow-600 bg-yellow-100'
-                        : 'text-green-600 bg-green-100'
-                    }`}>
-                      {isOutOfStock ? 'Out of Stock' : isLowStock ? 'Low Stock' : 'In Stock'}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 } 

@@ -33,13 +33,41 @@ export const signOut = async () => {
 
 // Client operations
 export const getClients = async () => {
-  const { data, error } = await supabase
-    .from('clients')
-    .select('*')
-    .order('created_at', { ascending: false })
-  
-  if (error) throw error
-  return data
+  try {
+    // Check environment variables
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Missing Supabase environment variables')
+    }
+
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      console.error('Authentication error in getClients:', userError)
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    console.log('Fetching clients for user:', user.id)
+
+    const { data, error } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+    
+    if (error) {
+      console.error('Supabase getClients error:', error)
+      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    }
+    
+    console.log('Clients fetched successfully:', data?.length || 0, 'clients')
+    return data
+  } catch (error) {
+    console.error('getClients error:', error)
+    throw error
+  }
 }
 
 export const createClientRecord = async (clientData: {
@@ -123,31 +151,98 @@ export const deleteClientRecord = async (id: string) => {
 }
 
 export const getClient = async (clientId: string) => {
-  const { data, error } = await supabase
-    .from('clients')
-    .select(`
-      *,
-      notes:client_notes(*)
-    `)
-    .eq('id', clientId)
-    .single()
-  
-  if (error) throw error
-  return data
+  try {
+    // Check environment variables
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Missing Supabase environment variables')
+    }
+
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      console.error('Authentication error in getClient:', userError)
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    console.log('Fetching client with ID:', clientId, 'for user:', user.id)
+
+    const { data, error } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('id', clientId)
+      .eq('user_id', user.id)  // Add user filtering for security
+      .single()
+    
+    if (error) {
+      console.error('Supabase getClient error:', {
+        error,
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      })
+      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    }
+    
+    if (!data) {
+      throw new Error(`Client not found with ID: ${clientId}`)
+    }
+    
+    console.log('Client fetched successfully:', data)
+    return data
+  } catch (error) {
+    console.error('getClient error:', {
+      error,
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    })
+    throw error
+  }
 }
 
 // Job operations
 export const getJobs = async () => {
-  const { data, error } = await supabase
-    .from('jobs')
-    .select(`
-      *,
-      client:clients(name, email)
-    `)
-    .order('scheduled_date', { ascending: true })
-  
-  if (error) throw error
-  return data
+  try {
+    // Check environment variables
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Missing Supabase environment variables')
+    }
+
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      console.error('Authentication error in getJobs:', userError)
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    console.log('Fetching jobs for user:', user.id)
+
+    const { data, error } = await supabase
+      .from('jobs')
+      .select(`
+        *,
+        client:clients(name, email)
+      `)
+      .eq('user_id', user.id)
+      .order('scheduled_date', { ascending: true })
+    
+    if (error) {
+      console.error('Supabase getJobs error:', error)
+      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    }
+    
+    console.log('Jobs fetched successfully:', data?.length || 0, 'jobs')
+    return data
+  } catch (error) {
+    console.error('getJobs error:', error)
+    throw error
+  }
 }
 
 export const createJob = async (jobData: {
@@ -225,20 +320,73 @@ export const deleteJob = async (id: string) => {
 }
 
 export const getJob = async (jobId: string) => {
-  const { data, error } = await supabase
-    .from('jobs')
-    .select(`
-      *,
-      client:clients(*),
-      tasks:tasks(*),
-      notes:notes(*),
-      photos:photos(*)
-    `)
-    .eq('id', jobId)
-    .single()
-  
-  if (error) throw error
-  return data
+  try {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    // First get the job with client info
+    const { data: jobData, error: jobError } = await supabase
+      .from('jobs')
+      .select(`
+        *,
+        client:clients(*)
+      `)
+      .eq('id', jobId)
+      .eq('user_id', user.id)
+      .single()
+    
+    if (jobError) {
+      console.error('Supabase getJob error:', jobError)
+      throw new Error(`Database error: ${jobError.message} (Code: ${jobError.code})`)
+    }
+
+    if (!jobData) {
+      throw new Error('Job not found')
+    }
+
+    // Then get related data separately to avoid relationship issues
+    const [tasksResult, notesResult] = await Promise.all([
+      supabase.from('tasks').select('*').eq('job_id', jobId),
+      supabase.from('notes').select('*').eq('job_id', jobId)
+    ])
+
+    // Get photos for all tasks of this job
+    let photosResult: { data: Array<{
+      id: string
+      task_id: string
+      file_path: string
+      file_name: string
+      file_size: number
+      created_at: string
+    }> | null } = { data: [] }
+    if (tasksResult.data && tasksResult.data.length > 0) {
+      const taskIds = tasksResult.data.map(task => task.id)
+      photosResult = await supabase
+        .from('photos')
+        .select('*')
+        .in('task_id', taskIds)
+    }
+
+    // Combine the data
+    const result = {
+      ...jobData,
+      tasks: tasksResult.data || [],
+      notes: notesResult.data || [],
+      photos: photosResult.data || []
+    }
+    
+    console.log('Job data retrieved:', result)
+    return result
+  } catch (error) {
+    console.error('getJob error:', error)
+    throw error
+  }
 }
 
 // Task operations
@@ -259,14 +407,23 @@ export const createTask = async (taskData: {
   description: string
   order_index: number
 }) => {
-  const { data, error } = await supabase
-    .from('tasks')
-    .insert([taskData])
-    .select()
-    .single()
-  
-  if (error) throw error
-  return data
+  try {
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert([taskData])
+      .select()
+      .single()
+    
+    if (error) {
+      console.error('Supabase createTask error:', error)
+      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    }
+    
+    return data
+  } catch (error) {
+    console.error('createTask error:', error)
+    throw error
+  }
 }
 
 export const updateTask = async (id: string, taskData: Partial<{
@@ -289,6 +446,55 @@ export const updateTask = async (id: string, taskData: Partial<{
 export const deleteTask = async (id: string) => {
   const { error } = await supabase
     .from('tasks')
+    .delete()
+    .eq('id', id)
+  
+  if (error) throw error
+}
+
+// Note operations
+export const getNotes = async (jobId: string) => {
+  const { data, error } = await supabase
+    .from('notes')
+    .select('*')
+    .eq('job_id', jobId)
+    .order('created_at', { ascending: false })
+  
+  if (error) throw error
+  return data
+}
+
+export const createNote = async (noteData: {
+  job_id: string
+  content: string
+}) => {
+  const { data, error } = await supabase
+    .from('notes')
+    .insert([noteData])
+    .select()
+    .single()
+  
+  if (error) throw error
+  return data
+}
+
+export const updateNote = async (id: string, noteData: Partial<{
+  content: string
+}>) => {
+  const { data, error } = await supabase
+    .from('notes')
+    .update(noteData)
+    .eq('id', id)
+    .select()
+    .single()
+  
+  if (error) throw error
+  return data
+}
+
+export const deleteNote = async (id: string) => {
+  const { error } = await supabase
+    .from('notes')
     .delete()
     .eq('id', id)
   
@@ -333,6 +539,18 @@ export const getPhotos = async (taskId: string) => {
   return data
 }
 
+export const getPhotosForJob = async (jobId: string) => {
+  // First get all tasks for the job
+  const tasks = await getTasks(jobId)
+  
+  // Then get photos for all tasks
+  const photoPromises = tasks.map(task => getPhotos(task.id))
+  const photosArrays = await Promise.all(photoPromises)
+  
+  // Flatten the arrays
+  return photosArrays.flat()
+}
+
 export const getPhotoUrl = (filePath: string) => {
   const { data } = supabase.storage
     .from('photos')
@@ -341,14 +559,90 @@ export const getPhotoUrl = (filePath: string) => {
   return data.publicUrl
 }
 
+export const deletePhoto = async (photoId: string, filePath: string) => {
+  // Delete from storage
+  const { error: storageError } = await supabase.storage
+    .from('photos')
+    .remove([filePath])
+  
+  if (storageError) throw storageError
+  
+  // Delete from database
+  const { error: dbError } = await supabase
+    .from('photos')
+    .delete()
+    .eq('id', photoId)
+  
+  if (dbError) throw dbError
+}
+
+// Job-level photo function for mobile portal
+export const addPhoto = async (jobId: string, file: File) => {
+  try {
+    // Get the first task for this job (or create a general task if none exist)
+    const tasks = await getTasks(jobId)
+    let taskId = tasks[0]?.id
+    
+    if (!taskId) {
+      // Create a general task for photos if none exist
+      const generalTask = await createTask(jobId, {
+        title: 'General Photos',
+        description: 'Photos added via mobile portal',
+        order_index: 0
+      })
+      taskId = generalTask.id
+    }
+    
+    // Upload the photo using existing uploadPhoto function
+    return await uploadPhoto(file, taskId)
+  } catch (error) {
+    console.error('addPhoto error:', error)
+    throw error
+  }
+}
+
+// Note operations
+export const addNote = async (jobId: string, content: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('notes')
+      .insert([{
+        job_id: jobId,
+        content: content.trim()
+      }])
+      .select()
+      .single()
+    
+    if (error) {
+      console.error('Supabase addNote error:', error)
+      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    }
+    
+    return data
+  } catch (error) {
+    console.error('addNote error:', error)
+    throw error
+  }
+}
+
 // Report operations
 export const createReport = async (jobId: string, reportUrl: string) => {
   try {
+    // Get current user for user_id
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
     const { data, error } = await supabase
       .from('reports')
       .insert([{
         job_id: jobId,
-        report_url: reportUrl
+        report_url: reportUrl,
+        user_id: user.id
       }])
       .select()
       .single()
@@ -390,31 +684,81 @@ export const updateReport = async (reportId: string, reportData: Partial<{
 }
 
 export const getReports = async () => {
-  const { data, error } = await supabase
-    .from('reports')
-    .select(`
-      *,
-      job:jobs(
-        title,
-        scheduled_date,
-        client:clients(name)
-      )
-    `)
-    .order('created_at', { ascending: false })
-  
-  if (error) throw error
-  return data
+  try {
+    // Check environment variables
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Missing Supabase environment variables')
+    }
+
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      console.error('Authentication error in getReports:', userError)
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    console.log('Fetching reports for user:', user.id)
+
+    const { data, error } = await supabase
+      .from('reports')
+      .select(`
+        *,
+        job:jobs(
+          title,
+          scheduled_date,
+          client:clients(name)
+        )
+      `)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+    
+    if (error) {
+      console.error('Supabase getReports error:', error)
+      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    }
+
+    console.log('Reports fetched successfully:', data?.length || 0, 'reports')
+    return data
+  } catch (error) {
+    console.error('getReports error:', error)
+    throw error
+  }
 }
 
 // User profile operations
 export const getUserProfile = async () => {
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .single()
-  
-  if (error && error.code !== 'PGRST116') throw error
-  return data
+  try {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    console.log('Getting profile for user:', user.id)
+
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('user_id', user.id)  // Add WHERE clause
+      .single()
+    
+    if (error && error.code !== 'PGRST116') {
+      console.error('Supabase getUserProfile error:', error)
+      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    }
+    
+    console.log('Retrieved profile:', data)
+    return data
+  } catch (error) {
+    console.error('getUserProfile error:', error)
+    throw error
+  }
 }
 
 export const createUserProfile = async (profileData: {
@@ -426,24 +770,47 @@ export const createUserProfile = async (profileData: {
   contact_email?: string
   contact_phone?: string
   website_url?: string
+  subscription_tier?: 'free' | 'pro'
 }) => {
-  // Get current user
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    throw new Error('User not authenticated')
-  }
+  try {
+    console.log('createUserProfile called with:', profileData)
+    
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    console.log('Auth result:', { user: user?.id, error: userError })
+    
+    if (userError) {
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
 
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .insert([{
+    const insertData = {
       ...profileData,
-      user_id: user.id
-    }])
-    .select()
-    .single()
-  
-  if (error) throw error
-  return data
+      user_id: user.id,
+      subscription_tier: profileData.subscription_tier || 'free'
+    }
+    console.log('Inserting data:', insertData)
+
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .insert([insertData])
+      .select()
+      .single()
+    
+    console.log('Supabase response:', { data, error })
+    
+    if (error) {
+      console.error('Supabase createUserProfile error:', error)
+      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    }
+    
+    return data
+  } catch (error) {
+    console.error('createUserProfile error:', error)
+    throw error
+  }
 }
 
 export const updateUserProfile = async (profileData: Partial<{
@@ -455,26 +822,67 @@ export const updateUserProfile = async (profileData: Partial<{
   contact_email: string
   contact_phone: string
   website_url: string
+  subscription_tier: 'free' | 'pro'
 }>) => {
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .update(profileData)
-    .select()
-    .single()
-  
-  if (error) throw error
-  return data
+  try {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    console.log('Updating profile for user:', user.id)
+
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .update(profileData)
+      .eq('user_id', user.id)  // Add WHERE clause
+      .select()
+      .single()
+    
+    if (error) {
+      console.error('Supabase updateUserProfile error:', error)
+      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    }
+    
+    return data
+  } catch (error) {
+    console.error('updateUserProfile error:', error)
+    throw error
+  }
 }
 
 // Calendar integration operations
 export const getCalendarIntegration = async () => {
-  const { data, error } = await supabase
-    .from('calendar_integrations')
-    .select('*')
-    .single()
-  
-  if (error && error.code !== 'PGRST116') throw error
-  return data
+  try {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    const { data, error } = await supabase
+      .from('calendar_integrations')
+      .select('*')
+      .eq('user_id', user.id)
+      .single()
+    
+    if (error && error.code !== 'PGRST116') {
+      console.error('Supabase getCalendarIntegration error:', error)
+      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    }
+    
+    return data
+  } catch (error) {
+    console.error('getCalendarIntegration error:', error)
+    throw error
+  }
 }
 
 export const createCalendarIntegration = async (integrationData: {
@@ -507,28 +915,75 @@ export const updateCalendarIntegration = async (integrationData: Partial<{
   is_active: boolean
   last_sync: string | null
 }>) => {
-  const { data, error } = await supabase
-    .from('calendar_integrations')
-    .update(integrationData)
-    .select()
-    .single()
-  
-  if (error) throw error
-  return data
+  try {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    const { data, error } = await supabase
+      .from('calendar_integrations')
+      .update(integrationData)
+      .eq('user_id', user.id)
+      .select()
+      .single()
+    
+    if (error) {
+      console.error('Supabase updateCalendarIntegration error:', error)
+      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    }
+    
+    return data
+  } catch (error) {
+    console.error('updateCalendarIntegration error:', error)
+    throw error
+  }
 }
 
 // Recurring job operations
 export const getRecurringJobs = async () => {
-  const { data, error } = await supabase
-    .from('recurring_jobs')
-    .select(`
-      *,
-      client:clients(name)
-    `)
-    .order('created_at', { ascending: false })
-  
-  if (error) throw error
-  return data
+  try {
+    // Check environment variables
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Missing Supabase environment variables')
+    }
+
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      console.error('Authentication error in getRecurringJobs:', userError)
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    console.log('Fetching recurring jobs for user:', user.id)
+
+    const { data, error } = await supabase
+      .from('recurring_jobs')
+      .select(`
+        *,
+        client:clients(name)
+      `)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+    
+    if (error) {
+      console.error('Supabase getRecurringJobs error:', error)
+      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    }
+
+    console.log('Recurring jobs fetched successfully:', data?.length || 0, 'jobs')
+    return data
+  } catch (error) {
+    console.error('getRecurringJobs error:', error)
+    throw error
+  }
 }
 
 export const createRecurringJob = async (jobData: {
@@ -590,15 +1045,6 @@ export const deleteRecurringJob = async (id: string) => {
 }
 
 // Supply operations
-export const getSupplies = async () => {
-  const { data, error } = await supabase
-    .from('supplies')
-    .select('*')
-    .order('name', { ascending: true })
-  
-  if (error) throw error
-  return data
-}
 
 export const createSupply = async (supplyData: {
   name: string
@@ -846,8 +1292,151 @@ export const generateToken = () => {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
 }
 
+// Service Types operations
+export const getServiceTypes = async () => {
+  try {
+    // Check environment variables
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Missing Supabase environment variables')
+    }
+
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      console.error('Authentication error in getServiceTypes:', userError)
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    console.log('Fetching service types for user:', user.id)
+
+    const { data, error } = await supabase
+      .from('service_types')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('name', { ascending: true })
+    
+    if (error) {
+      console.error('Supabase getServiceTypes error:', error)
+      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    }
+
+    console.log('Service types fetched successfully:', data?.length || 0, 'service types')
+    return data
+  } catch (error) {
+    console.error('getServiceTypes error:', error)
+    throw error
+  }
+}
+
+export const createServiceType = async (serviceTypeData: {
+  name: string
+  description?: string
+}) => {
+  try {
+    // Check environment variables
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Missing Supabase environment variables')
+    }
+
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      console.error('Authentication error in createServiceType:', userError)
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    console.log('Creating service type for user:', user.id)
+    console.log('Service type data:', serviceTypeData)
+
+    const { data, error } = await supabase
+      .from('service_types')
+      .insert([{
+        ...serviceTypeData,
+        user_id: user.id
+      }])
+      .select()
+      .single()
+    
+    if (error) {
+      console.error('Supabase createServiceType error:', error)
+      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    }
+
+    console.log('Service type created successfully:', data)
+    return data
+  } catch (error) {
+    console.error('createServiceType error:', error)
+    throw error
+  }
+}
+
+export const updateServiceType = async (id: string, serviceTypeData: Partial<{
+  name: string
+  description: string
+}>) => {
+  try {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    const { data, error } = await supabase
+      .from('service_types')
+      .update(serviceTypeData)
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error('updateServiceType error:', error)
+    throw error
+  }
+}
+
+export const deleteServiceType = async (id: string) => {
+  try {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    const { error } = await supabase
+      .from('service_types')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id)
+    
+    if (error) throw error
+  } catch (error) {
+    console.error('deleteServiceType error:', error)
+    throw error
+  }
+}
+
 export const testDatabaseConnection = async () => {
   try {
+    // Check environment variables
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return { success: false, error: 'Missing Supabase environment variables' }
+    }
+
     // Test basic connection
     const { data, error } = await supabase
       .from('clients')
@@ -865,23 +1454,179 @@ export const testDatabaseConnection = async () => {
   }
 }
 
-export const getDashboardStats = async () => {
-  const [
-    { count: totalJobs },
-    { count: completedJobs },
-    { count: totalClients },
-    { count: totalReports }
-  ] = await Promise.all([
-    supabase.from('jobs').select('*', { count: 'exact', head: true }),
-    supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
-    supabase.from('clients').select('*', { count: 'exact', head: true }),
-    supabase.from('reports').select('*', { count: 'exact', head: true })
-  ])
+export const testServiceTypesTable = async () => {
+  try {
+    // Check environment variables
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return { success: false, error: 'Missing Supabase environment variables' }
+    }
 
-  return {
-    totalJobs: totalJobs || 0,
-    completedJobs: completedJobs || 0,
-    totalClients: totalClients || 0,
-    totalReports: totalReports || 0
+    // Test if service_types table exists and is accessible
+    const { data, error } = await supabase
+      .from('service_types')
+      .select('count', { count: 'exact', head: true })
+    
+    if (error) {
+      console.error('Service types table test failed:', error)
+      return { success: false, error: error.message, code: error.code }
+    }
+    
+    return { success: true, message: 'Service types table accessible', count: data }
+  } catch (error) {
+    console.error('Service types table test error:', error)
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
-} 
+}
+
+export const testRecurringJobsTable = async () => {
+  try {
+    // Check environment variables
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return { success: false, error: 'Missing Supabase environment variables' }
+    }
+
+    // Test if recurring_jobs table exists and is accessible
+    const { data, error } = await supabase
+      .from('recurring_jobs')
+      .select('count', { count: 'exact', head: true })
+    
+    if (error) {
+      console.error('Recurring jobs table test failed:', error)
+      return { success: false, error: error.message, code: error.code }
+    }
+    
+    return { success: true, message: 'Recurring jobs table accessible', count: data }
+  } catch (error) {
+    console.error('Recurring jobs table test error:', error)
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
+export const testUserProfilesTable = async () => {
+  try {
+    // Test if user_profiles table exists and is accessible
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('count', { count: 'exact', head: true })
+    
+    if (error) {
+      console.error('User profiles table test failed:', error)
+      return { success: false, error: error.message, code: error.code }
+    }
+    
+    return { success: true, message: 'User profiles table accessible', count: data }
+  } catch (error) {
+    console.error('User profiles table test error:', error)
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
+export const checkTableExists = async (tableName: string) => {
+  try {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('count', { count: 'exact', head: true })
+    
+    if (error) {
+      return { exists: false, error: error.message, code: error.code }
+    }
+    
+    return { exists: true, message: `Table ${tableName} exists and is accessible` }
+  } catch (error) {
+    return { exists: false, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
+export const checkRequiredTables = async () => {
+  const requiredTables = [
+    'user_profiles',
+    'clients',
+    'jobs',
+    'tasks',
+    'calendar_integrations',
+    'service_types',
+    'recurring_jobs',
+    'supplies',
+    'reports'
+  ]
+  
+  const results = await Promise.all(
+    requiredTables.map(async (table) => {
+      const result = await checkTableExists(table)
+      return { table, ...result }
+    })
+  )
+  
+  const missingTables = results.filter(r => !r.exists)
+  const existingTables = results.filter(r => r.exists)
+  
+  return {
+    allTablesExist: missingTables.length === 0,
+    existingTables: existingTables.map(r => r.table),
+    missingTables: missingTables.map(r => ({ table: r.table, error: r.error })),
+    results
+  }
+}
+
+export const getDashboardStats = async () => {
+  try {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    const [
+      { count: totalJobs },
+      { count: completedJobs },
+      { count: totalClients },
+      { count: totalReports }
+    ] = await Promise.all([
+      supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'completed'),
+      supabase.from('clients').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase.from('reports').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
+    ])
+
+    return {
+      totalJobs: totalJobs || 0,
+      completedJobs: completedJobs || 0,
+      totalClients: totalClients || 0,
+      totalReports: totalReports || 0
+    }
+  } catch (error) {
+    console.error('getDashboardStats error:', error)
+    throw error
+  }
+}
+
+
+export const getSupplies = async () => {
+  try {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    const { data, error } = await supabase
+      .from('supplies')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('name', { ascending: true })
+    
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error('getSupplies error:', error)
+    throw error
+  }
+}
+
+ 

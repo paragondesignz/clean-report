@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -10,18 +11,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, Search, Edit, Trash2, Calendar, Clock, User, RefreshCw, CheckCircle, XCircle } from "lucide-react"
-import { getRecurringJobs, createRecurringJob, updateRecurringJob, deleteRecurringJob, getClients } from "@/lib/supabase-client"
-import { formatDate, formatTime } from "@/lib/utils"
+import { Plus, Edit, Trash2, Calendar, Clock, User, RefreshCw, CheckCircle, XCircle, Building2, DollarSign } from "lucide-react"
+import { getRecurringJobs, createRecurringJob, updateRecurringJob, deleteRecurringJob, getClients, testRecurringJobsTable, checkRequiredTables } from "@/lib/supabase-client"
+import { formatDate, formatTime, formatDistanceToNow, formatListDate } from "@/lib/utils"
+import { DataTable } from "@/components/ui/data-table"
+import { useSubscription } from "@/hooks/use-subscription"
+import { UpgradePrompt } from "@/components/ui/upgrade-prompt"
 import type { RecurringJob, Client, RecurringJobWithClient } from "@/types/database"
 
 export default function RecurringJobsPage() {
   const { toast } = useToast()
+  const { canAccessFeature, getFeatureUpgradeMessage, isPro } = useSubscription()
   const [recurringJobs, setRecurringJobs] = useState<RecurringJobWithClient[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
   const [editingJob, setEditingJob] = useState<RecurringJobWithClient | null>(null)
   const [formData, setFormData] = useState({
     client_id: "",
@@ -34,30 +39,57 @@ export default function RecurringJobsPage() {
     is_active: true
   })
 
-  useEffect(() => {
-    fetchData()
-  }, [])
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true)
+      
+      // Check environment variables
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+        throw new Error('Missing Supabase environment variables')
+      }
+      
+      // Test recurring jobs table
+      console.log('Testing recurring jobs table...')
+      const tableTest = await testRecurringJobsTable()
+      console.log('Recurring jobs table test result:', tableTest)
+      
+      if (!tableTest.success) {
+        throw new Error(`Recurring jobs table not accessible: ${tableTest.error}`)
+      }
+      
+      console.log('Fetching recurring jobs data...')
       const [recurringJobsData, clientsData] = await Promise.all([
         getRecurringJobs(),
         getClients()
       ])
+      
+      console.log('Recurring jobs data fetched successfully:', {
+        recurringJobs: recurringJobsData?.length || 0,
+        clients: clientsData?.length || 0
+      })
+      
       setRecurringJobs(recurringJobsData || [])
       setClients(clientsData || [])
     } catch (error) {
       console.error('Error fetching data:', error)
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        error: error
+      })
       toast({
         title: "Error",
-        description: "Failed to load recurring jobs",
+        description: error instanceof Error ? error.message : "Failed to load recurring jobs",
         variant: "destructive"
       })
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -177,11 +209,18 @@ export default function RecurringJobsPage() {
     }
   }
 
-  const filteredJobs = recurringJobs.filter(job =>
-    job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    job.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    job.client?.name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const getRecurringValue = (job: RecurringJobWithClient) => {
+    // Mock value calculation - in real app this would come from pricing
+    return `$${(Math.random() * 150 + 75).toFixed(0)}`
+  }
+
+  const getLastUpdated = (job: RecurringJobWithClient) => {
+    // Mock last updated - in real app this would be actual timestamp
+    const days = Math.floor(Math.random() * 10)
+    if (days === 0) return 'Today'
+    if (days === 1) return 'Yesterday'
+    return `${days} days ago`
+  }
 
   const stats = {
     total: recurringJobs.length,
@@ -193,148 +232,111 @@ export default function RecurringJobsPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading recurring jobs...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Loading recurring jobs...</p>
         </div>
       </div>
     )
   }
 
+  // Prepare data for DataTable
+  const tableData = recurringJobs.map(job => ({
+    id: job.id,
+    title: job.title,
+    client: job.client?.name || 'Unknown Client',
+    status: job.is_active,
+    frequency: job.frequency,
+    startDate: formatListDate(job.start_date),
+    endDate: job.end_date ? formatListDate(job.end_date) : null,
+    scheduledTime: formatTime(job.scheduled_time),
+    value: getRecurringValue(job),
+    lastUpdated: getLastUpdated(job),
+    description: job.description,
+    clientId: job.client_id
+  }))
+
+  // Define columns for DataTable
+  const columns = [
+    {
+      key: 'title',
+      label: 'Recurring Job',
+      sortable: true,
+      width: '300px',
+      render: (value: string, row: any) => (
+        <div className="flex items-center space-x-2 min-w-0">
+          <div className="flex items-center justify-center w-6 h-6 bg-primary/10 rounded-md flex-shrink-0">
+            {getFrequencyIcon(row.frequency)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium truncate text-sm">{value}</p>
+            <p className="text-xs text-muted-foreground truncate max-w-[200px]">{row.description || 'No description'}</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      key: 'client',
+      label: 'Client',
+      sortable: true,
+      width: '160px',
+      render: (value: string, row: any) => (
+        <div className="min-w-0">
+          <div className="font-medium text-sm truncate">{value}</div>
+          <div className="text-xs text-muted-foreground truncate">Client name</div>
+        </div>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      sortable: true,
+      width: '120px',
+      render: (value: boolean) => (
+        <Badge className={value ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} variant="outline">
+          {value ? 'Active' : 'Inactive'}
+        </Badge>
+      )
+    },
+    {
+      key: 'frequency',
+      label: 'Frequency',
+      sortable: true,
+      width: '100px',
+      render: (value: string) => (
+        <div className="text-sm">
+          <div className="font-medium">{getFrequencyText(value)}</div>
+          <div className="text-muted-foreground text-xs">Schedule</div>
+        </div>
+      )
+    },
+    {
+      key: 'startDate',
+      label: 'Schedule',
+      sortable: true,
+      width: '120px',
+      render: (value: string, row: any) => (
+        <div className="text-sm">
+          <div className="font-medium">{value}</div>
+          <div className="text-muted-foreground text-xs">{row.scheduledTime}</div>
+        </div>
+      )
+    },
+    {
+      key: 'value',
+      label: 'Value',
+      sortable: true,
+      width: '100px',
+      render: (value: string) => (
+        <div className="flex items-center space-x-1">
+          <span className="font-medium text-green-600">{value}</span>
+        </div>
+      )
+    }
+  ]
+
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Recurring Jobs</h1>
-          <p className="text-gray-600">Manage your automated cleaning schedules</p>
-        </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => {
-              setEditingJob(null)
-              resetForm()
-            }}>
-              <Plus className="h-4 w-4 mr-2" />
-              New Recurring Job
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>{editingJob ? 'Edit Recurring Job' : 'Create Recurring Job'}</DialogTitle>
-              <DialogDescription>
-                {editingJob ? 'Update recurring job settings' : 'Set up an automated cleaning schedule'}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="client">Client</Label>
-                  <Select
-                    value={formData.client_id}
-                    onValueChange={(value) => setFormData({ ...formData, client_id: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a client" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="title">Job Title</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="e.g., Weekly Cleaning, Monthly Deep Clean"
-                    required
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Describe the cleaning requirements"
-                    required
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="frequency">Frequency</Label>
-                  <Select
-                    value={formData.frequency}
-                    onValueChange={(value: "daily" | "weekly" | "bi_weekly" | "monthly") => 
-                      setFormData({ ...formData, frequency: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="daily">Daily</SelectItem>
-                      <SelectItem value="weekly">Weekly</SelectItem>
-                      <SelectItem value="bi_weekly">Bi-weekly</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="start_date">Start Date</Label>
-                  <Input
-                    id="start_date"
-                    type="date"
-                    value={formData.start_date}
-                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="end_date">End Date (Optional)</Label>
-                  <Input
-                    id="end_date"
-                    type="date"
-                    value={formData.end_date}
-                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="time">Scheduled Time</Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={formData.scheduled_time}
-                    onChange={(e) => setFormData({ ...formData, scheduled_time: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="is_active"
-                    checked={formData.is_active}
-                    onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
-                  />
-                  <Label htmlFor="is_active">Active</Label>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  {editingJob ? 'Update' : 'Create'} Recurring Job
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
@@ -377,115 +379,186 @@ export default function RecurringJobsPage() {
         </Card>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-        <Input
-          placeholder="Search recurring jobs by title, description, or client..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
-      </div>
+      {/* DataTable */}
+      <DataTable
+        title="Recurring Jobs"
+        description="Manage your automated cleaning schedules"
+        data={tableData}
+        columns={columns}
+        addButton={{
+          label: "New Recurring Job",
+          icon: Plus,
+          onClick: canAccessFeature('recurringJobs') ? () => {
+            setEditingJob(null)
+            resetForm()
+            setIsCreateDialogOpen(true)
+          } : () => {
+            setShowUpgradePrompt(true)
+          }
+        }}
+        onRowClick={(row) => `/recurring/${row.id}`}
+        searchPlaceholder="Search recurring jobs by title, description, or client..."
+        filterOptions={[
+          { key: 'status', label: 'Status', options: [
+            { value: 'true', label: 'Active' },
+            { value: 'false', label: 'Inactive' }
+          ]},
+          { key: 'frequency', label: 'Frequency', options: [
+            { value: 'daily', label: 'Daily' },
+            { value: 'weekly', label: 'Weekly' },
+            { value: 'bi_weekly', label: 'Bi-weekly' },
+            { value: 'monthly', label: 'Monthly' }
+          ]}
+        ]}
+        customActions={[
+          {
+            label: 'Edit',
+            icon: Edit,
+            onClick: (row) => handleEdit(recurringJobs.find(j => j.id === row.id)!),
+            variant: 'outline'
+          },
+          {
+            label: 'Toggle Active',
+            icon: CheckCircle,
+            onClick: (row) => handleToggleActive(recurringJobs.find(j => j.id === row.id)!),
+            show: (row) => row.status,
+            variant: 'outline'
+          },
+          {
+            label: 'Toggle Active',
+            icon: XCircle,
+            onClick: (row) => handleToggleActive(recurringJobs.find(j => j.id === row.id)!),
+            show: (row) => !row.status,
+            variant: 'outline'
+          }
+        ]}
+      />
 
-      {/* Recurring Jobs Grid */}
-      {filteredJobs.length === 0 ? (
-        <Card>
-          <CardContent className="text-center py-12">
-            <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <RefreshCw className="h-6 w-6 text-gray-400" />
+      {/* Create/Edit Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>{editingJob ? 'Edit Recurring Job' : 'Create Recurring Job'}</DialogTitle>
+            <DialogDescription>
+              {editingJob ? 'Update recurring job settings' : 'Set up an automated cleaning schedule'}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="client">Client</Label>
+                <Select
+                  value={formData.client_id}
+                  onValueChange={(value) => setFormData({ ...formData, client_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="title">Job Title</Label>
+                <Input
+                  id="title"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="e.g., Weekly Cleaning, Monthly Deep Clean"
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Describe the cleaning requirements"
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="frequency">Frequency</Label>
+                <Select
+                  value={formData.frequency}
+                  onValueChange={(value: "daily" | "weekly" | "bi_weekly" | "monthly") => 
+                    setFormData({ ...formData, frequency: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Daily</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="bi_weekly">Bi-weekly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="start_date">Start Date</Label>
+                <Input
+                  id="start_date"
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="end_date">End Date (Optional)</Label>
+                <Input
+                  id="end_date"
+                  type="date"
+                  value={formData.end_date}
+                  onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="time">Scheduled Time</Label>
+                <Input
+                  id="time"
+                  type="time"
+                  value={formData.scheduled_time}
+                  onChange={(e) => setFormData({ ...formData, scheduled_time: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="is_active"
+                  checked={formData.is_active}
+                  onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                />
+                <Label htmlFor="is_active">Active</Label>
+              </div>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchTerm ? 'No recurring jobs found' : 'No recurring jobs yet'}
-            </h3>
-            <p className="text-gray-600 mb-4">
-              {searchTerm 
-                ? 'Try adjusting your search terms'
-                : 'Get started by creating your first recurring job'
-              }
-            </p>
-            {!searchTerm && (
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create First Recurring Job
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                Cancel
               </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredJobs.map((job) => (
-            <Card key={job.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    {getFrequencyIcon(job.frequency)}
-                    <CardTitle className="text-lg">{job.title}</CardTitle>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      checked={job.is_active}
-                      onCheckedChange={() => handleToggleActive(job)}
-                    />
-                    <div className="flex space-x-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(job)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(job.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-gray-600 line-clamp-2">{job.description}</p>
-                <div className="space-y-2">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <User className="h-4 w-4 mr-2" />
-                    {job.client?.name || 'Unknown Client'}
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    {getFrequencyText(job.frequency)}
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Starts {formatDate(job.start_date)}
-                  </div>
-                  {job.end_date && (
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Calendar className="h-4 w-4 mr-2" />
-                      Ends {formatDate(job.end_date)}
-                    </div>
-                  )}
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Clock className="h-4 w-4 mr-2" />
-                    {formatTime(job.scheduled_time)}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-2">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    job.is_active 
-                      ? 'text-green-600 bg-green-100' 
-                      : 'text-red-600 bg-red-100'
-                  }`}>
-                    {job.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+              <Button type="submit">
+                {editingJob ? 'Update' : 'Create'} Recurring Job
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <UpgradePrompt
+        title="Upgrade to Pro"
+        description={getFeatureUpgradeMessage('Recurring Jobs')}
+        feature="Recurring Jobs"
+        isOpen={showUpgradePrompt}
+        onClose={() => setShowUpgradePrompt(false)}
+      />
     </div>
   )
 } 

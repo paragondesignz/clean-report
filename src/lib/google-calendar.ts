@@ -254,6 +254,181 @@ export const syncJobsWithGoogleCalendar = async (
   }
 }
 
+// iCal Feed Integration (Simpler alternative to Google Calendar API)
+export interface ICalEvent {
+  uid: string
+  summary: string
+  description?: string
+  start: Date
+  end: Date
+  location?: string
+  attendees?: string[]
+}
+
+// Parse iCal feed content
+export const parseICalFeed = (icalContent: string): ICalEvent[] => {
+  const events: ICalEvent[] = []
+  const lines = icalContent.split('\n')
+  
+  let currentEvent: Partial<ICalEvent> = {}
+  let inEvent = false
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    
+    if (line === 'BEGIN:VEVENT') {
+      inEvent = true
+      currentEvent = {}
+    } else if (line === 'END:VEVENT') {
+      if (currentEvent.uid && currentEvent.summary && currentEvent.start && currentEvent.end) {
+        events.push(currentEvent as ICalEvent)
+      }
+      inEvent = false
+      currentEvent = {}
+    } else if (inEvent) {
+      if (line.startsWith('UID:')) {
+        currentEvent.uid = line.substring(4)
+      } else if (line.startsWith('SUMMARY:')) {
+        currentEvent.summary = line.substring(8)
+      } else if (line.startsWith('DESCRIPTION:')) {
+        currentEvent.description = line.substring(12)
+      } else if (line.startsWith('DTSTART')) {
+        const dateStr = line.includes('TZID=') 
+          ? line.split(':')[1] 
+          : line.split(':')[1]
+        currentEvent.start = new Date(dateStr)
+      } else if (line.startsWith('DTEND')) {
+        const dateStr = line.includes('TZID=') 
+          ? line.split(':')[1] 
+          : line.split(':')[1]
+        currentEvent.end = new Date(dateStr)
+      } else if (line.startsWith('LOCATION:')) {
+        currentEvent.location = line.substring(9)
+      } else if (line.startsWith('ATTENDEE:')) {
+        if (!currentEvent.attendees) currentEvent.attendees = []
+        currentEvent.attendees.push(line.substring(9))
+      }
+    }
+  }
+  
+  return events
+}
+
+// Fetch events from iCal feed
+export const fetchICalEvents = async (icalUrl: string): Promise<ICalEvent[]> => {
+  try {
+    const response = await fetch(icalUrl)
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+    
+    const content = await response.text()
+    
+    if (!content.includes('BEGIN:VCALENDAR')) {
+      throw new Error('Invalid iCal format')
+    }
+    
+    return parseICalFeed(content)
+  } catch (error) {
+    console.error('Failed to fetch iCal events:', error)
+    throw error
+  }
+}
+
+// Test iCal feed connection
+export const testICalConnection = async (icalUrl: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const response = await fetch('/api/calendar/test', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ icalUrl })
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || 'Failed to test calendar connection'
+      }
+    }
+
+    return {
+      success: data.success,
+      error: data.error
+    }
+  } catch (error) {
+    console.error('iCal connection test failed:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to test calendar connection'
+    }
+  }
+}
+
+// Sync calendar events
+export const syncCalendarEvents = async (icalUrl: string, userId: string): Promise<{ success: boolean; error?: string; eventCount?: number; lastSync?: string }> => {
+  try {
+    const response = await fetch('/api/calendar/sync', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ icalUrl, userId })
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || 'Failed to sync calendar events'
+      }
+    }
+
+    return {
+      success: data.success,
+      eventCount: data.eventCount,
+      lastSync: data.lastSync,
+      error: data.error
+    }
+  } catch (error) {
+    console.error('Calendar sync failed:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to sync calendar events'
+    }
+  }
+}
+
+// Convert cleaning job to iCal event format
+export const jobToICalEvent = (
+  job: { id: string; scheduled_date: string; scheduled_time: string; title: string; description: string },
+  client: { name: string; address: string; email: string }
+): string => {
+  const startTime = new Date(`${job.scheduled_date}T${job.scheduled_time}`)
+  const endTime = new Date(startTime.getTime() + 2 * 60 * 60 * 1000) // 2 hours duration
+  
+  const formatDate = (date: Date) => {
+    return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+  }
+  
+  return [
+    'BEGIN:VEVENT',
+    `UID:clean-report-${job.id}`,
+    `SUMMARY:${job.title} - ${client.name}`,
+    `DESCRIPTION:${job.description}`,
+    `DTSTART:${formatDate(startTime)}`,
+    `DTEND:${formatDate(endTime)}`,
+    `LOCATION:${client.address}`,
+    `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${client.email}`,
+    'END:VEVENT'
+  ].join('\r\n')
+}
+
 // Declare global gapi for TypeScript
 declare global {
   interface Window {

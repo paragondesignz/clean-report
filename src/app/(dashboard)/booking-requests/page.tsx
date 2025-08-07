@@ -1,29 +1,46 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect, useCallback } from "react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Calendar, Clock, User, Mail, Phone, Eye, CheckCircle, XCircle, ArrowRight } from "lucide-react"
-import { getBookingRequests, updateBookingRequest } from "@/lib/supabase-client"
-import { formatDate, formatTime } from "@/lib/utils"
-import Link from "next/link"
+import { Calendar, Clock, CheckCircle, XCircle, DollarSign } from "lucide-react"
+import { getBookingRequests, updateBookingRequest, getServiceTypes } from "@/lib/supabase-client"
+import { formatTime, formatListDate } from "@/lib/utils"
+import { DataTable } from "@/components/ui/data-table"
 import type { BookingRequest } from "@/types/database"
+
+// Table row interface for booking requests
+interface BookingRequestTableRow {
+  id: string
+  title: string
+  email: string
+  phone: string
+  status: string
+  requestedDate: string
+  requestedTime: string
+  serviceType: string
+  value: string
+  lastUpdated: string
+  description?: string
+  bookingToken: string
+  createdAt: string
+}
 
 export default function BookingRequestsPage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [bookingRequests, setBookingRequests] = useState<BookingRequest[]>([])
+  const [serviceTypes, setServiceTypes] = useState<Array<{ id: string, name: string }>>([])
 
-  useEffect(() => {
-    fetchBookingRequests()
-  }, [])
-
-  const fetchBookingRequests = async () => {
+  const fetchBookingRequests = useCallback(async () => {
     try {
-      const data = await getBookingRequests()
-      setBookingRequests(data)
+      const [bookingData, serviceTypesData] = await Promise.all([
+        getBookingRequests(),
+        getServiceTypes()
+      ])
+      setBookingRequests(bookingData)
+      setServiceTypes(serviceTypesData || [])
     } catch (error) {
       console.error('Error fetching booking requests:', error)
       toast({
@@ -34,7 +51,11 @@ export default function BookingRequestsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
+
+  useEffect(() => {
+    fetchBookingRequests()
+  }, [fetchBookingRequests])
 
   const handleStatusUpdate = async (id: string, status: 'confirmed' | 'rejected' | 'cancelled') => {
     try {
@@ -70,6 +91,13 @@ export default function BookingRequestsPage() {
   }
 
   const formatServiceTypes = (serviceType: string) => {
+    // First try to find the service type in the dynamic list
+    const foundServiceType = serviceTypes.find(st => st.id === serviceType)
+    if (foundServiceType) {
+      return foundServiceType.name
+    }
+    
+    // Fallback to hardcoded mapping for backward compatibility
     const serviceMap: Record<string, string> = {
       'general_cleaning': 'General Cleaning',
       'deep_cleaning': 'Deep Cleaning',
@@ -82,46 +110,157 @@ export default function BookingRequestsPage() {
     return serviceMap[serviceType] || serviceType
   }
 
+  const getBookingIcon = (status: string) => {
+    switch (status) {
+      case 'pending': return <Clock className="h-4 w-4 text-yellow-600" />
+      case 'confirmed': return <CheckCircle className="h-4 w-4 text-green-600" />
+      case 'rejected': return <XCircle className="h-4 w-4 text-red-600" />
+      case 'cancelled': return <XCircle className="h-4 w-4 text-gray-600" />
+      default: return <Calendar className="h-4 w-4 text-gray-600" />
+    }
+  }
+
+  const getBookingValue = (request: BookingRequest) => {
+    // Mock value calculation - in real app this would come from service pricing
+    return `$${(Math.random() * 200 + 50).toFixed(0)}`
+  }
+
+  const getLastUpdated = (request: BookingRequest) => {
+    // Mock last updated - in real app this would be actual timestamp
+    const days = Math.floor(Math.random() * 7)
+    if (days === 0) return 'Today'
+    if (days === 1) return 'Yesterday'
+    return `${days} days ago`
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="mt-2 text-slate-600">Loading booking requests...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Loading booking requests...</p>
         </div>
       </div>
     )
   }
 
+  // Prepare data for DataTable
+  const tableData = bookingRequests.map(request => ({
+    id: request.id,
+    title: request.client_name,
+    email: request.client_email,
+    phone: request.client_phone,
+    status: request.status,
+    requestedDate: formatListDate(request.requested_date),
+    requestedTime: formatTime(request.requested_time),
+    serviceType: formatServiceTypes(request.service_type),
+    value: getBookingValue(request),
+    lastUpdated: getLastUpdated(request),
+    description: request.description,
+    bookingToken: request.booking_token,
+    createdAt: request.created_at
+  }))
+
+  // Define columns for DataTable
+  const columns = [
+    {
+      key: 'title',
+      label: 'Booking Request',
+      sortable: true,
+      width: '300px',
+      render: (value: string, row: BookingRequestTableRow) => (
+        <div className="flex items-center space-x-2 min-w-0">
+          <div className="flex items-center justify-center w-6 h-6 bg-primary/10 rounded-md flex-shrink-0">
+            {getBookingIcon(row.status)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium truncate text-sm">{value}</p>
+            <p className="text-xs text-muted-foreground truncate max-w-[200px]">{row.email}</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      key: 'phone',
+      label: 'Contact',
+      sortable: true,
+      width: '160px',
+      render: (value: string, row: BookingRequestTableRow) => (
+        <div className="min-w-0">
+          <div className="font-medium text-sm truncate">{value || 'No phone'}</div>
+          <div className="text-xs text-muted-foreground truncate">{row.serviceType}</div>
+        </div>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      sortable: true,
+      width: '120px',
+      render: (value: string) => (
+        <Badge className={getStatusColor(value)} variant="outline">
+          {value.charAt(0).toUpperCase() + value.slice(1)}
+        </Badge>
+      )
+    },
+    {
+      key: 'requestedDate',
+      label: 'Requested',
+      sortable: true,
+      width: '120px',
+      render: (value: string, row: BookingRequestTableRow) => (
+        <div className="text-sm">
+          <div className="font-medium">{value}</div>
+          <div className="text-muted-foreground text-xs">{row.requestedTime}</div>
+        </div>
+      )
+    },
+    {
+      key: 'value',
+      label: 'Est. Value',
+      sortable: true,
+      width: '100px',
+      render: (value: string) => (
+        <div className="flex items-center space-x-1">
+          <span className="font-medium text-green-600">{value}</span>
+        </div>
+      )
+    },
+    {
+      key: 'lastUpdated',
+      label: 'Updated',
+      sortable: true,
+      width: '120px',
+      render: (value: string) => (
+        <div className="text-sm text-muted-foreground">
+          {value}
+        </div>
+      )
+    }
+  ]
+
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Booking Requests</h1>
-          <p className="text-slate-600">Manage incoming booking requests from your portal</p>
-        </div>
-      </div>
-
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="shadow-lg border-slate-200">
+        <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Total Requests</p>
-                <p className="text-2xl font-bold text-slate-900">{bookingRequests.length}</p>
+                <p className="text-sm font-medium text-muted-foreground">Total Requests</p>
+                <p className="text-2xl font-bold">{bookingRequests.length}</p>
               </div>
-              <Calendar className="h-8 w-8 text-purple-600" />
+              <Calendar className="h-8 w-8 text-primary" />
             </div>
           </CardContent>
         </Card>
         
-        <Card className="shadow-lg border-slate-200">
+        <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Pending</p>
+                <p className="text-sm font-medium text-muted-foreground">Pending</p>
                 <p className="text-2xl font-bold text-yellow-600">
                   {bookingRequests.filter(r => r.status === 'pending').length}
                 </p>
@@ -131,11 +270,11 @@ export default function BookingRequestsPage() {
           </CardContent>
         </Card>
         
-        <Card className="shadow-lg border-slate-200">
+        <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Confirmed</p>
+                <p className="text-sm font-medium text-muted-foreground">Confirmed</p>
                 <p className="text-2xl font-bold text-green-600">
                   {bookingRequests.filter(r => r.status === 'confirmed').length}
                 </p>
@@ -145,11 +284,11 @@ export default function BookingRequestsPage() {
           </CardContent>
         </Card>
         
-        <Card className="shadow-lg border-slate-200">
+        <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-600">Rejected</p>
+                <p className="text-sm font-medium text-muted-foreground">Rejected</p>
                 <p className="text-2xl font-bold text-red-600">
                   {bookingRequests.filter(r => r.status === 'rejected').length}
                 </p>
@@ -160,113 +299,43 @@ export default function BookingRequestsPage() {
         </Card>
       </div>
 
-      {/* Booking Requests List */}
-      <Card className="shadow-lg border-slate-200">
-        <CardHeader>
-          <CardTitle>Recent Booking Requests</CardTitle>
-          <CardDescription>
-            Review and manage incoming booking requests
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {bookingRequests.length === 0 ? (
-            <div className="text-center py-8">
-              <Calendar className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-slate-900 mb-2">No booking requests yet</h3>
-              <p className="text-slate-600">When customers submit booking requests through your portal, they'll appear here.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {bookingRequests.map((request) => (
-                <div key={request.id} className="border border-slate-200 rounded-lg p-4 hover:bg-slate-50 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-slate-900">{request.client_name}</h3>
-                        <Badge className={getStatusColor(request.status)}>
-                          {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-                        </Badge>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                        <div className="space-y-2">
-                          <div className="flex items-center text-sm text-slate-600">
-                            <Mail className="h-4 w-4 mr-2" />
-                            {request.client_email}
-                          </div>
-                          <div className="flex items-center text-sm text-slate-600">
-                            <Phone className="h-4 w-4 mr-2" />
-                            {request.client_phone}
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <div className="flex items-center text-sm text-slate-600">
-                            <Calendar className="h-4 w-4 mr-2" />
-                            {formatDate(request.requested_date)}
-                          </div>
-                          <div className="flex items-center text-sm text-slate-600">
-                            <Clock className="h-4 w-4 mr-2" />
-                            {formatTime(request.requested_time)}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="mb-3">
-                        <p className="text-sm font-medium text-slate-700 mb-1">Service Requested:</p>
-                        <p className="text-sm text-slate-600">{formatServiceTypes(request.service_type)}</p>
-                      </div>
-                      
-                      {request.description && (
-                        <div className="mb-3">
-                          <p className="text-sm font-medium text-slate-700 mb-1">Additional Details:</p>
-                          <p className="text-sm text-slate-600">{request.description}</p>
-                        </div>
-                      )}
-                      
-                      <div className="text-xs text-slate-500">
-                        Submitted: {new Date(request.created_at).toLocaleDateString()} at {new Date(request.created_at).toLocaleTimeString()}
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-col gap-2 ml-4">
-                      {request.status === 'pending' && (
-                        <>
-                          <Button
-                            size="sm"
-                            onClick={() => handleStatusUpdate(request.id, 'confirmed')}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Confirm
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleStatusUpdate(request.id, 'rejected')}
-                            className="border-red-200 text-red-700 hover:bg-red-50"
-                          >
-                            <XCircle className="h-4 w-4 mr-1" />
-                            Reject
-                          </Button>
-                        </>
-                      )}
-                      
-                      <Link href={`/jobs?booking=${request.booking_token}`}>
-                        <Button size="sm" variant="outline">
-                          <Eye className="h-4 w-4 mr-1" />
-                          View Job
-                          <ArrowRight className="h-4 w-4 ml-1" />
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* DataTable */}
+      <DataTable
+        title="Booking Requests"
+        description="Manage incoming booking requests from your portal"
+        data={tableData}
+        columns={columns}
+        onRowClick={(row) => `/jobs?booking=${row.bookingToken}`}
+        searchPlaceholder="Search requests by client name, email, or service type..."
+        filterOptions={[
+          { key: 'status', label: 'Status', options: [
+            { value: 'pending', label: 'Pending' },
+            { value: 'confirmed', label: 'Confirmed' },
+            { value: 'rejected', label: 'Rejected' },
+            { value: 'cancelled', label: 'Cancelled' }
+          ]},
+          { key: 'serviceType', label: 'Service Type', options: serviceTypes.map(st => ({
+            value: st.id,
+            label: st.name
+          }))}
+        ]}
+        customActions={[
+          {
+            label: 'Confirm',
+            icon: CheckCircle,
+            onClick: (row) => handleStatusUpdate(row.id, 'confirmed'),
+            show: (row) => row.status === 'pending',
+            variant: 'default'
+          },
+          {
+            label: 'Reject',
+            icon: XCircle,
+            onClick: (row) => handleStatusUpdate(row.id, 'rejected'),
+            show: (row) => row.status === 'pending',
+            variant: 'outline'
+          }
+        ]}
+      />
     </div>
   )
 } 

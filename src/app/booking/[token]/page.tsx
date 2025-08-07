@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { Calendar, Clock, User, Mail, Phone, Globe } from "lucide-react"
 import { DateTimePicker } from "@/components/ui/date-time-picker"
-import { getUserProfile, createJobFromBookingRequest } from "@/lib/supabase-client"
+import { getUserProfile, createJobFromBookingRequest, getServiceTypes } from "@/lib/supabase-client"
 import { sendBookingNotification, sendBookingConfirmation } from "@/lib/email-service"
 import type { UserProfile } from "@/types/database"
 
@@ -33,15 +33,7 @@ export default function BookingPage({ params }: { params: Promise<{ token: strin
   })
 
   // Available service types
-  const serviceTypes = [
-    { value: "general_cleaning", label: "General Cleaning" },
-    { value: "deep_cleaning", label: "Deep Cleaning" },
-    { value: "kitchen_cleaning", label: "Kitchen Cleaning" },
-    { value: "bathroom_cleaning", label: "Bathroom Cleaning" },
-    { value: "carpet_cleaning", label: "Carpet Cleaning" },
-    { value: "window_cleaning", label: "Window Cleaning" },
-    { value: "move_in_out", label: "Move In/Out Cleaning" }
-  ]
+  const [serviceTypes, setServiceTypes] = useState<Array<{ value: string, label: string }>>([])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -59,6 +51,28 @@ export default function BookingPage({ params }: { params: Promise<{ token: strin
           setUserProfile(profile)
         } catch (error) {
           console.log("No user profile found, using default contact info")
+        }
+
+        // Fetch service types
+        try {
+          const serviceTypesData = await getServiceTypes()
+          const formattedServiceTypes = serviceTypesData.map(st => ({
+            value: st.id,
+            label: st.name
+          }))
+          setServiceTypes(formattedServiceTypes)
+        } catch (error) {
+          console.log("No service types found, using default service types")
+          // Fallback to default service types if none are configured
+          setServiceTypes([
+            { value: "general_cleaning", label: "General Cleaning" },
+            { value: "deep_cleaning", label: "Deep Cleaning" },
+            { value: "kitchen_cleaning", label: "Kitchen Cleaning" },
+            { value: "bathroom_cleaning", label: "Bathroom Cleaning" },
+            { value: "carpet_cleaning", label: "Carpet Cleaning" },
+            { value: "window_cleaning", label: "Window Cleaning" },
+            { value: "move_in_out", label: "Move In/Out Cleaning" }
+          ])
         }
       } catch (error) {
         console.error("Error fetching data:", error)

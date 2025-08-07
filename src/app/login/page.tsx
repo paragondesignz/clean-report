@@ -45,10 +45,12 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-4">
-            <Sparkles className="h-8 w-8 text-blue-600 mr-2" />
-            <h1 className="text-3xl font-bold text-gray-900">Clean Report</h1>
-          </div>
+          <Link href="/" className="inline-block">
+            <div className="flex items-center justify-center mb-4">
+              <Sparkles className="h-8 w-8 text-blue-600 mr-2" />
+              <h1 className="text-3xl font-bold text-gray-900">Clean Report</h1>
+            </div>
+          </Link>
           <p className="text-gray-600">Professional cleaning management made simple</p>
         </div>
 
@@ -88,11 +90,16 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
+            <div className="mt-6 text-center space-y-2">
               <p className="text-sm text-gray-600">
                 Don't have an account?{" "}
                 <Link href="/signup" className="text-blue-600 hover:text-blue-500 font-medium">
                   Sign up
+                </Link>
+              </p>
+              <p className="text-sm text-gray-600">
+                <Link href="/" className="text-gray-500 hover:text-gray-700">
+                  ← Back to home
                 </Link>
               </p>
             </div>

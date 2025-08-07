@@ -79,6 +79,9 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   primary_color TEXT DEFAULT '#3B82F6',
   secondary_color TEXT DEFAULT '#1E40AF',
   email_template TEXT,
+  contact_email TEXT,
+  contact_phone TEXT,
+  website_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -208,6 +211,93 @@ CREATE TABLE IF NOT EXISTS service_recommendations (
   last_completed_date DATE,
   frequency_weeks INTEGER NOT NULL DEFAULT 4,
   is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Integration Tables
+
+-- Stripe connections table
+CREATE TABLE IF NOT EXISTS stripe_connections (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  account_id TEXT NOT NULL,
+  account_name TEXT NOT NULL,
+  is_live BOOLEAN DEFAULT FALSE,
+  webhook_secret TEXT,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Stripe payments table
+CREATE TABLE IF NOT EXISTS stripe_payments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+  stripe_payment_intent_id TEXT UNIQUE NOT NULL,
+  amount INTEGER NOT NULL, -- Amount in cents
+  currency TEXT DEFAULT 'usd',
+  status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'succeeded', 'failed', 'canceled')),
+  client_secret TEXT,
+  payment_method_types TEXT[],
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Twilio connections table
+CREATE TABLE IF NOT EXISTS twilio_connections (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  account_sid TEXT NOT NULL,
+  auth_token TEXT NOT NULL,
+  phone_number TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Twilio SMS logs table
+CREATE TABLE IF NOT EXISTS twilio_sms_logs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  message_sid TEXT UNIQUE NOT NULL,
+  to_number TEXT NOT NULL,
+  from_number TEXT NOT NULL,
+  message_body TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('queued', 'sent', 'delivered', 'failed', 'undelivered')),
+  error_code TEXT,
+  error_message TEXT,
+  sent_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  delivered_at TIMESTAMP WITH TIME ZONE
+);
+
+-- QuickBooks connections table
+CREATE TABLE IF NOT EXISTS quickbooks_connections (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  realm_id TEXT NOT NULL,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT NOT NULL,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- QuickBooks invoices table
+CREATE TABLE IF NOT EXISTS quickbooks_invoices (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+  quickbooks_invoice_id TEXT UNIQUE NOT NULL,
+  invoice_number TEXT NOT NULL,
+  customer_id TEXT NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('draft', 'pending', 'approved', 'closed', 'voided')),
+  due_date DATE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -399,6 +489,44 @@ CREATE POLICY "Users can insert own service recommendations" ON service_recommen
 CREATE POLICY "Users can update own service recommendations" ON service_recommendations FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own service recommendations" ON service_recommendations FOR DELETE USING (auth.uid() = user_id);
 
+-- Integration policies
+
+-- Stripe connections policies
+CREATE POLICY "Users can view own stripe connections" ON stripe_connections FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own stripe connections" ON stripe_connections FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own stripe connections" ON stripe_connections FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own stripe connections" ON stripe_connections FOR DELETE USING (auth.uid() = user_id);
+
+-- Stripe payments policies
+CREATE POLICY "Users can view own stripe payments" ON stripe_payments FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own stripe payments" ON stripe_payments FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own stripe payments" ON stripe_payments FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own stripe payments" ON stripe_payments FOR DELETE USING (auth.uid() = user_id);
+
+-- Twilio connections policies
+CREATE POLICY "Users can view own twilio connections" ON twilio_connections FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own twilio connections" ON twilio_connections FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own twilio connections" ON twilio_connections FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own twilio connections" ON twilio_connections FOR DELETE USING (auth.uid() = user_id);
+
+-- Twilio SMS logs policies
+CREATE POLICY "Users can view own twilio sms logs" ON twilio_sms_logs FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own twilio sms logs" ON twilio_sms_logs FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own twilio sms logs" ON twilio_sms_logs FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own twilio sms logs" ON twilio_sms_logs FOR DELETE USING (auth.uid() = user_id);
+
+-- QuickBooks connections policies
+CREATE POLICY "Users can view own quickbooks connections" ON quickbooks_connections FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own quickbooks connections" ON quickbooks_connections FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own quickbooks connections" ON quickbooks_connections FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own quickbooks connections" ON quickbooks_connections FOR DELETE USING (auth.uid() = user_id);
+
+-- QuickBooks invoices policies
+CREATE POLICY "Users can view own quickbooks invoices" ON quickbooks_invoices FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own quickbooks invoices" ON quickbooks_invoices FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own quickbooks invoices" ON quickbooks_invoices FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own quickbooks invoices" ON quickbooks_invoices FOR DELETE USING (auth.uid() = user_id);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_clients_user_id ON clients(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
@@ -420,6 +548,17 @@ CREATE INDEX IF NOT EXISTS idx_booking_requests_token ON booking_requests(bookin
 CREATE INDEX IF NOT EXISTS idx_calendar_integrations_user_id ON calendar_integrations(user_id);
 CREATE INDEX IF NOT EXISTS idx_client_portal_users_client_id ON client_portal_users(client_id);
 CREATE INDEX IF NOT EXISTS idx_service_recommendations_user_id ON service_recommendations(user_id);
+
+-- Integration indexes
+CREATE INDEX IF NOT EXISTS idx_stripe_connections_user_id ON stripe_connections(user_id);
+CREATE INDEX IF NOT EXISTS idx_stripe_payments_user_id ON stripe_payments(user_id);
+CREATE INDEX IF NOT EXISTS idx_stripe_payments_job_id ON stripe_payments(job_id);
+CREATE INDEX IF NOT EXISTS idx_twilio_connections_user_id ON twilio_connections(user_id);
+CREATE INDEX IF NOT EXISTS idx_twilio_sms_logs_user_id ON twilio_sms_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_twilio_sms_logs_job_id ON twilio_sms_logs(job_id);
+CREATE INDEX IF NOT EXISTS idx_quickbooks_connections_user_id ON quickbooks_connections(user_id);
+CREATE INDEX IF NOT EXISTS idx_quickbooks_invoices_user_id ON quickbooks_invoices(user_id);
+CREATE INDEX IF NOT EXISTS idx_quickbooks_invoices_job_id ON quickbooks_invoices(job_id);
 
 -- Create functions for automatic timestamps
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -443,6 +582,13 @@ CREATE TRIGGER update_booking_requests_updated_at BEFORE UPDATE ON booking_reque
 CREATE TRIGGER update_calendar_integrations_updated_at BEFORE UPDATE ON calendar_integrations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_client_portal_users_updated_at BEFORE UPDATE ON client_portal_users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_service_recommendations_updated_at BEFORE UPDATE ON service_recommendations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Integration triggers
+CREATE TRIGGER update_stripe_connections_updated_at BEFORE UPDATE ON stripe_connections FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_stripe_payments_updated_at BEFORE UPDATE ON stripe_payments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_twilio_connections_updated_at BEFORE UPDATE ON twilio_connections FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_quickbooks_connections_updated_at BEFORE UPDATE ON quickbooks_connections FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_quickbooks_invoices_updated_at BEFORE UPDATE ON quickbooks_invoices FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Enable storage for file uploads
 INSERT INTO storage.buckets (id, name, public) VALUES ('photos', 'photos', true) ON CONFLICT (id) DO NOTHING;

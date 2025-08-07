@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { Star, MessageSquare, CheckCircle, Calendar, User } from "lucide-react"
 import { formatDate } from "@/lib/utils"
+import { FeedbackService } from "@/lib/feedback-service"
 import type { Feedback } from "@/types/database"
 
 export default function FeedbackPage({ params }: { params: Promise<{ token: string }> }) {
@@ -17,6 +18,7 @@ export default function FeedbackPage({ params }: { params: Promise<{ token: stri
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [jobDetails, setJobDetails] = useState({
     title: "",
     client_name: "",
@@ -29,15 +31,39 @@ export default function FeedbackPage({ params }: { params: Promise<{ token: stri
   })
 
   useEffect(() => {
-    // TODO: Fetch feedback token details from Supabase
-    // For now, using placeholder data
-    setJobDetails({
-      title: "Cleaning Service",
-      client_name: "Client",
-      completed_date: "2025-08-04",
-      description: "Cleaning service completed"
-    })
-    setLoading(false)
+    const fetchFeedbackData = async () => {
+      try {
+        const feedbackData = await FeedbackService.getFeedbackByToken(token)
+        
+        if (!feedbackData) {
+          setError('Invalid feedback link or feedback not found')
+          setLoading(false)
+          return
+        }
+
+        // Check if feedback already submitted
+        if (feedbackData.feedback) {
+          setSubmitted(true)
+          setLoading(false)
+          return
+        }
+
+        setJobDetails({
+          title: feedbackData.job.title,
+          client_name: feedbackData.client.name,
+          completed_date: feedbackData.job.scheduled_date,
+          description: feedbackData.job.description || "Cleaning service completed"
+        })
+        
+        setLoading(false)
+      } catch (error) {
+        console.error('Error fetching feedback data:', error)
+        setError('Failed to load feedback form')
+        setLoading(false)
+      }
+    }
+
+    fetchFeedbackData()
   }, [token])
 
   const handleRatingClick = (rating: number) => {
@@ -49,14 +75,22 @@ export default function FeedbackPage({ params }: { params: Promise<{ token: stri
     setSubmitting(true)
     
     try {
-      // TODO: Submit feedback to Supabase
-      // For now, just simulate success
-      setSubmitted(true)
-      toast({
-        title: "Thank you!",
-        description: "Your feedback has been submitted successfully.",
+      const success = await FeedbackService.submitFeedback(token, {
+        rating: feedback.rating,
+        comment: feedback.comment
       })
+
+      if (success) {
+        setSubmitted(true)
+        toast({
+          title: "Thank you!",
+          description: "Your feedback has been submitted successfully.",
+        })
+      } else {
+        throw new Error('Failed to submit feedback')
+      }
     } catch (error) {
+      console.error('Error submitting feedback:', error)
       toast({
         title: "Error",
         description: "Failed to submit feedback. Please try again.",
@@ -74,6 +108,25 @@ export default function FeedbackPage({ params }: { params: Promise<{ token: stri
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-2 text-gray-600">Loading feedback form...</p>
         </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <Card className="max-w-md w-full mx-4">
+          <CardContent className="text-center py-12">
+            <MessageSquare className="h-16 w-16 text-red-600 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Error</h2>
+            <p className="text-gray-600 mb-6">
+              {error}
+            </p>
+            <Button onClick={() => window.history.back()}>
+              Go Back
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     )
   }

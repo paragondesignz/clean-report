@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -16,18 +16,14 @@ import {
   Download, 
   Mail, 
   Calendar, 
-  User, 
-  CheckCircle, 
   Clock, 
   Plus,
-  Search,
-  Filter,
-  RefreshCw,
   Send,
   Copy,
-  ExternalLink
+  Building2,
+  DollarSign
 } from "lucide-react"
-import { formatDate, formatTime } from "@/lib/utils"
+import { formatDate, formatTime, formatListDate } from "@/lib/utils"
 import { 
   getReports, 
   getJobs, 
@@ -36,6 +32,8 @@ import {
   updateReport,
   getUserProfile 
 } from "@/lib/supabase-client"
+import { downloadBrandedPDF } from "@/lib/pdf-generator"
+import { DataTable } from "@/components/ui/data-table"
 import type { Report, Job, Client, ReportWithJob, UserProfile } from "@/types/database"
 
 export default function ReportsPage() {
@@ -46,19 +44,20 @@ export default function ReportsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false)
   const [selectedJob, setSelectedJob] = useState<string>("")
   const [customMessage, setCustomMessage] = useState("")
 
-  useEffect(() => {
-    fetchData()
-  }, [])
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true)
+      
+      // Check environment variables
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+        throw new Error('Missing Supabase environment variables')
+      }
+      
+      console.log('Fetching reports data...')
       const [reportsData, jobsData, clientsData, profileData] = await Promise.all([
         getReports(),
         getJobs(),
@@ -66,21 +65,37 @@ export default function ReportsPage() {
         getUserProfile()
       ])
       
+      console.log('Data fetched successfully:', {
+        reports: reportsData?.length || 0,
+        jobs: jobsData?.length || 0,
+        clients: clientsData?.length || 0,
+        profile: !!profileData
+      })
+      
       setReports(reportsData || [])
       setJobs(jobsData || [])
       setClients(clientsData || [])
       setUserProfile(profileData)
     } catch (error) {
       console.error('Error fetching data:', error)
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        error: error
+      })
       toast({
         title: "Error",
-        description: "Failed to load reports data",
+        description: error instanceof Error ? error.message : "Failed to load reports data",
         variant: "destructive"
       })
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   const handleGenerateReport = async () => {
     if (!selectedJob) {
@@ -93,8 +108,9 @@ export default function ReportsPage() {
     }
 
     try {
-      // Generate a unique report URL
-      const reportUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reports/${generateReportId()}`
+      // Generate a unique report ID
+      const reportId = generateReportId()
+      const reportUrl = `${window.location.origin}/reports/${reportId}`
       
       await createReport(selectedJob, reportUrl)
       
@@ -123,23 +139,29 @@ export default function ReportsPage() {
 
   const handleDownloadReport = async (report: ReportWithJob) => {
     try {
-      // Generate PDF content
-      const pdfContent = await generatePDFContent(report)
+      // Get client data for the report
+      const client = clients.find(c => c.id === report.job?.client_id)
       
-      // Create and download PDF
-      const blob = new Blob([pdfContent], { type: 'application/pdf' })
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `clean-report-${report.id}.pdf`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
+      if (!report.job || !client || !userProfile) {
+        toast({
+          title: "Error",
+          description: "Missing data for report generation",
+          variant: "destructive"
+        })
+        return
+      }
+      
+      // Generate branded PDF
+      downloadBrandedPDF({
+        job: report.job,
+        client,
+        userProfile,
+        report
+      })
       
       toast({
         title: "Download started",
-        description: "Your report is being downloaded.",
+        description: "Your branded PDF report is being downloaded.",
       })
     } catch (error) {
       console.error('Error downloading report:', error)
@@ -188,41 +210,36 @@ export default function ReportsPage() {
     return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
   }
 
-  const generatePDFContent = async (report: ReportWithJob) => {
-    // This is a simplified PDF generation
-    // In a real implementation, you'd use a library like jsPDF or puppeteer
-    const content = `
-      Clean Report
-      ============
-      
-      Job: ${report.job?.title || 'Unknown'}
-      Client: ${report.job?.client?.name || 'Unknown'}
-      Date: ${report.job ? formatDate(report.job.scheduled_date) : 'Unknown'}
-      Time: ${report.job ? formatTime(report.job.scheduled_time) : 'Unknown'}
-      
-      Company: ${userProfile?.company_name || 'Clean Report'}
-      
-      Report ID: ${report.id}
-      Generated: ${formatDate(report.created_at)}
-    `
-    return content
-  }
+
 
   const getCompletedJobs = () => {
     return jobs.filter(job => job.status === 'completed')
   }
 
-  const filteredReports = reports.filter(report => {
-    const matchesSearch = 
-      report.job?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.job?.client?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesStatus = statusFilter === "all" || 
-      (statusFilter === "sent" && report.email_sent) ||
-      (statusFilter === "pending" && !report.email_sent)
-    
-    return matchesSearch && matchesStatus
-  })
+  const getReportStatus = (emailSent: boolean) => {
+    return emailSent ? 'Sent' : 'Pending'
+  }
+
+  const getStatusColor = (emailSent: boolean) => {
+    return emailSent ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+  }
+
+  const getReportIcon = (emailSent: boolean) => {
+    return emailSent ? <Mail className="h-4 w-4 text-green-600" /> : <FileText className="h-4 w-4 text-yellow-600" />
+  }
+
+  const getReportValue = (report: ReportWithJob) => {
+    // Mock value calculation - in real app this would come from job pricing
+    return `$${(Math.random() * 300 + 100).toFixed(0)}`
+  }
+
+  const getLastUpdated = (report: ReportWithJob) => {
+    // Mock last updated - in real app this would be actual timestamp
+    const days = Math.floor(Math.random() * 14)
+    if (days === 0) return 'Today'
+    if (days === 1) return 'Yesterday'
+    return `${days} days ago`
+  }
 
   const stats = {
     total: reports.length,
@@ -240,80 +257,109 @@ export default function ReportsPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading reports...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Loading reports...</p>
         </div>
       </div>
     )
   }
 
+  // Prepare data for DataTable
+  const tableData = reports.map(report => ({
+    id: report.id,
+    title: report.job?.title || 'Unknown Job',
+    client: report.job?.client?.name || 'Unknown Client',
+    status: report.email_sent,
+    scheduledDate: report.job ? formatListDate(report.job.scheduled_date) : 'Unknown date',
+    scheduledTime: report.job ? formatTime(report.job.scheduled_time) : 'Unknown time',
+    value: getReportValue(report),
+    lastUpdated: getLastUpdated(report),
+    reportUrl: report.report_url,
+    emailSent: report.email_sent,
+    job: report.job
+  }))
+
+  // Define columns for DataTable
+  const columns = [
+    {
+      key: 'title',
+      label: 'Report',
+      sortable: true,
+      width: '300px',
+      render: (value: string, row: any) => (
+        <div className="flex items-center space-x-2 min-w-0">
+          <div className="flex items-center justify-center w-6 h-6 bg-primary/10 rounded-md flex-shrink-0">
+            {getReportIcon(row.emailSent)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium truncate text-sm">{value}</p>
+            <p className="text-xs text-muted-foreground truncate max-w-[200px]">Professional cleaning report</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      key: 'client',
+      label: 'Client',
+      sortable: true,
+      width: '160px',
+      render: (value: string, row: any) => (
+        <div className="min-w-0">
+          <div className="font-medium text-sm truncate">{value}</div>
+          <div className="text-xs text-muted-foreground truncate">Report recipient</div>
+        </div>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      sortable: true,
+      width: '120px',
+      render: (value: boolean) => (
+        <Badge className={getStatusColor(value)} variant="outline">
+          {getReportStatus(value)}
+        </Badge>
+      )
+    },
+    {
+      key: 'scheduledDate',
+      label: 'Job Date',
+      sortable: true,
+      width: '120px',
+      render: (value: string, row: any) => (
+        <div className="text-sm">
+          <div className="font-medium">{value}</div>
+          <div className="text-muted-foreground text-xs">{row.scheduledTime}</div>
+        </div>
+      )
+    },
+    {
+      key: 'value',
+      label: 'Value',
+      sortable: true,
+      width: '100px',
+      render: (value: string) => (
+        <div className="flex items-center space-x-1">
+          <span className="font-medium text-green-600">{value}</span>
+        </div>
+      )
+    },
+    {
+      key: 'lastUpdated',
+      label: 'Updated',
+      sortable: true,
+      width: '120px',
+      render: (value: string) => (
+        <div className="text-sm text-muted-foreground">
+          {value}
+        </div>
+      )
+    }
+  ]
+
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Reports</h1>
-          <p className="text-gray-600">Generate and manage your cleaning reports</p>
-        </div>
-        <Dialog open={isGenerateDialogOpen} onOpenChange={setIsGenerateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Generate Report
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Generate New Report</DialogTitle>
-              <DialogDescription>
-                Create a professional report for a completed job
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="job">Select Job</Label>
-                <Select
-                  value={selectedJob}
-                  onValueChange={setSelectedJob}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a completed job" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getCompletedJobs().map((job) => {
-                      const client = clients.find(c => c.id === job.client_id)
-                      return (
-                        <SelectItem key={job.id} value={job.id}>
-                          {job.title} - {client?.name} ({formatDate(job.scheduled_date)})
-                        </SelectItem>
-                      )
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="message">Custom Message (Optional)</Label>
-                <Textarea
-                  id="message"
-                  value={customMessage}
-                  onChange={(e) => setCustomMessage(e.target.value)}
-                  placeholder="Add a personal message to the report..."
-                  rows={3}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsGenerateDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleGenerateReport}>
-                Generate Report
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
@@ -369,133 +415,102 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Search reports by job title or client name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Reports</SelectItem>
-            <SelectItem value="sent">Sent</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button variant="outline" onClick={fetchData}>
-          <RefreshCw className="h-4 w-4" />
-        </Button>
-      </div>
+      {/* DataTable */}
+      <DataTable
+        title="Reports"
+        description="Generate and manage your cleaning reports"
+        data={tableData}
+        columns={columns}
+        addButton={{
+          label: "Generate Report",
+          icon: Plus,
+          onClick: () => setIsGenerateDialogOpen(true)
+        }}
+        onRowClick={(row) => row.reportUrl}
+        searchPlaceholder="Search reports by job title or client name..."
+        filterOptions={[
+          { key: 'status', label: 'Status', options: [
+            { value: 'true', label: 'Sent' },
+            { value: 'false', label: 'Pending' }
+          ]}
+        ]}
+        customActions={[
+          {
+            label: 'View',
+            icon: Eye,
+            onClick: (row) => handleViewReport(row.reportUrl)
+          },
+          {
+            label: 'Download',
+            icon: Download,
+            onClick: (row) => handleDownloadReport({ id: row.id, job: row.job, report_url: row.reportUrl, email_sent: row.emailSent } as ReportWithJob)
+          },
+          {
+            label: 'Copy Link',
+            icon: Copy,
+            onClick: (row) => handleCopyReportLink(row.reportUrl)
+          },
+          {
+            label: 'Resend Email',
+            icon: Send,
+            onClick: (row) => handleResendEmail({ id: row.id, job: row.job, report_url: row.reportUrl, email_sent: row.emailSent } as ReportWithJob),
+            show: (row) => !row.emailSent
+          }
+        ]}
+      />
 
-      {/* Reports List */}
-      {filteredReports.length === 0 ? (
-        <Card>
-          <CardContent className="text-center py-12">
-            <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <FileText className="h-6 w-6 text-gray-400" />
+      {/* Generate Report Dialog */}
+      <Dialog open={isGenerateDialogOpen} onOpenChange={setIsGenerateDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Generate New Report</DialogTitle>
+            <DialogDescription>
+              Create a professional report for a completed job
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="job">Select Job</Label>
+              <Select
+                value={selectedJob}
+                onValueChange={setSelectedJob}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a completed job" />
+                </SelectTrigger>
+                <SelectContent>
+                  {getCompletedJobs().map((job) => {
+                    const client = clients.find(c => c.id === job.client_id)
+                    return (
+                      <SelectItem key={job.id} value={job.id}>
+                        {job.title} - {client?.name} ({formatDate(job.scheduled_date)})
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchTerm || statusFilter !== "all" ? 'No reports found' : 'No reports yet'}
-            </h3>
-            <p className="text-gray-600 mb-4">
-              {searchTerm || statusFilter !== "all"
-                ? 'Try adjusting your search or filter criteria'
-                : 'Generate your first report for a completed job'
-              }
-            </p>
-            {!searchTerm && statusFilter === "all" && (
-              <Button onClick={() => setIsGenerateDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Generate First Report
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredReports.map((report) => (
-            <Card key={report.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <FileText className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-lg">
-                      {report.job?.title || 'Unknown Job'}
-                    </CardTitle>
-                  </div>
-                  <div className="flex space-x-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleViewReport(report.report_url)}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleCopyReportLink(report.report_url)}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="space-y-2">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <User className="h-4 w-4 mr-2" />
-                    {report.job?.client?.name || 'Unknown Client'}
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    {report.job ? formatDate(report.job.scheduled_date) : 'Unknown date'}
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Clock className="h-4 w-4 mr-2" />
-                    {report.job ? formatTime(report.job.scheduled_time) : 'Unknown time'}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-2">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    report.email_sent 
-                      ? 'text-green-600 bg-green-100' 
-                      : 'text-yellow-600 bg-yellow-100'
-                  }`}>
-                    {report.email_sent ? 'Sent' : 'Pending'}
-                  </span>
-                  <div className="flex space-x-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDownloadReport(report)}
-                    >
-                      <Download className="h-3 w-3" />
-                    </Button>
-                    {!report.email_sent && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleResendEmail(report)}
-                      >
-                        <Send className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+            <div className="grid gap-2">
+              <Label htmlFor="message">Custom Message (Optional)</Label>
+              <Textarea
+                id="message"
+                value={customMessage}
+                onChange={(e) => setCustomMessage(e.target.value)}
+                placeholder="Add a personal message to the report..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsGenerateDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleGenerateReport}>
+              Generate Report
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

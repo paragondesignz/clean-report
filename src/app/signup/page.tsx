@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Sparkles } from "lucide-react"
 
 export default function SignupPage() {
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [companyName, setCompanyName] = useState("")
@@ -19,6 +20,14 @@ export default function SignupPage() {
   const { signUp } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
+
+  // Set email from URL parameter if available
+  useEffect(() => {
+    const emailParam = searchParams.get('email')
+    if (emailParam) {
+      setEmail(emailParam)
+    }
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,6 +41,7 @@ export default function SignupPage() {
       })
       router.push("/login")
     } catch (error) {
+      console.error('Error during signup:', error)
       toast({
         title: "Signup failed",
         description: error instanceof Error ? error.message : "Please try again with different credentials.",
@@ -46,10 +56,12 @@ export default function SignupPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-4">
-            <Sparkles className="h-8 w-8 text-blue-600 mr-2" />
-            <h1 className="text-3xl font-bold text-gray-900">Clean Report</h1>
-          </div>
+          <Link href="/" className="inline-block">
+            <div className="flex items-center justify-center mb-4">
+              <Sparkles className="h-8 w-8 text-blue-600 mr-2" />
+              <h1 className="text-3xl font-bold text-gray-900">Clean Report</h1>
+            </div>
+          </Link>
           <p className="text-gray-600">Join thousands of cleaning professionals</p>
         </div>
 
@@ -100,11 +112,16 @@ export default function SignupPage() {
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
+            <div className="mt-6 text-center space-y-2">
               <p className="text-sm text-gray-600">
                 Already have an account?{" "}
                 <Link href="/login" className="text-blue-600 hover:text-blue-500 font-medium">
                   Sign in
+                </Link>
+              </p>
+              <p className="text-sm text-gray-600">
+                <Link href="/" className="text-gray-500 hover:text-gray-700">
+                  ← Back to home
                 </Link>
               </p>
             </div>

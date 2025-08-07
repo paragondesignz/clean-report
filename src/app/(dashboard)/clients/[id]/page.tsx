@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,18 +17,20 @@ import {
   Save,
   X,
   User, 
-  MapPin, 
-  Calendar,
+  MapPin,
   Mail,
   Phone,
   MessageSquare,
   FileText,
   Clock,
-  Pencil
+  Pencil,
+  ExternalLink,
+  History,
+  Copy
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
-import { getClient } from "@/lib/supabase-client"
-import type { Client } from "@/types/database"
+import { getClient, getJobs } from "@/lib/supabase-client"
+import type { Client, Job } from "@/types/database"
 
 interface ClientNote {
   id: string
@@ -70,23 +72,43 @@ export default function ClientDetailsPage() {
     address: ""
   })
 
-  useEffect(() => {
-    if (params.id) {
-      fetchClientDetails(params.id as string)
-    }
-  }, [params.id])
-
-  const hasUnsavedChanges = () => {
-    return JSON.stringify(formData) !== JSON.stringify(originalFormData)
-  }
-
-  const fetchClientDetails = async (clientId: string) => {
+  const fetchClientDetails = useCallback(async (clientId: string) => {
     try {
       setLoading(true)
-      // Fetch client details from Supabase
-      const clientData = await getClient(clientId)
+      
+      // Validate client ID
+      if (!clientId || clientId === 'undefined' || clientId === 'null') {
+        throw new Error('Invalid client ID')
+      }
+      
+      console.log('Fetching client details for ID:', clientId)
+      
+      // Fetch client details and jobs data
+      const [clientData, jobsData] = await Promise.all([
+        getClient(clientId),
+        getJobs()
+      ])
+      
       if (clientData) {
-        setClient(clientData)
+        // Calculate job statistics for this client
+        const clientJobs = jobsData?.filter(job => job.client_id === clientId) || []
+        const totalJobs = clientJobs.length
+        const completedJobs = clientJobs.filter(job => job.status === 'completed').length
+        // const upcomingJobs = clientJobs.filter(job => ['scheduled', 'in_progress'].includes(job.status)).length
+        
+        // Calculate total revenue (assuming a fixed rate per job for now)
+        // In a real app, you'd have a pricing table or job-specific pricing
+        const revenuePerJob = 150 // This could be configurable or job-specific
+        const totalRevenue = completedJobs * revenuePerJob
+        
+        const clientWithStats: ClientWithDetails = {
+          ...clientData,
+          totalJobs,
+          completedJobs,
+          totalRevenue
+        }
+        
+        setClient(clientWithStats)
         const initialFormData = {
           name: clientData.name,
           email: clientData.email,
@@ -104,15 +126,49 @@ export default function ClientDetailsPage() {
         router.push('/clients')
       }
     } catch (error) {
-      console.error('Error fetching client details:', error)
+      console.error('Error fetching client details:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        clientId
+      })
+      
+      let errorMessage = "Failed to load client details"
+      if (error instanceof Error) {
+        if (error.message.includes('not found')) {
+          errorMessage = "Client not found"
+        } else if (error.message.includes('Authentication error')) {
+          errorMessage = "Authentication failed. Please log in again."
+        } else if (error.message.includes('Database error')) {
+          errorMessage = "Database connection error. Please try again."
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to load client details",
+        description: errorMessage,
         variant: "destructive"
       })
+      
+      // Redirect to clients list if client not found
+      if (error instanceof Error && error.message.includes('not found')) {
+        router.push('/clients')
+      }
     } finally {
       setLoading(false)
     }
+  }, [toast, router])
+
+  useEffect(() => {
+    if (params.id) {
+      fetchClientDetails(params.id as string)
+    }
+  }, [params.id, fetchClientDetails])
+
+  const hasUnsavedChanges = () => {
+    return JSON.stringify(formData) !== JSON.stringify(originalFormData)
   }
 
   const handleSave = async () => {
@@ -128,6 +184,7 @@ export default function ClientDetailsPage() {
         description: "Client updated successfully"
       })
     } catch (error) {
+      console.error('Error updating client:', error)
       toast({
         title: "Error",
         description: "Failed to update client",
@@ -193,6 +250,7 @@ export default function ClientDetailsPage() {
         description: "Note added successfully"
       })
     } catch (error) {
+      console.error('Error adding note:', error)
       toast({
         title: "Error",
         description: "Failed to add note",
@@ -220,6 +278,7 @@ export default function ClientDetailsPage() {
         description: "Note updated successfully"
       })
     } catch (error) {
+      console.error('Error updating note:', error)
       toast({
         title: "Error",
         description: "Failed to update note",
@@ -240,6 +299,7 @@ export default function ClientDetailsPage() {
         description: "Note deleted successfully"
       })
     } catch (error) {
+      console.error('Error deleting note:', error)
       toast({
         title: "Error",
         description: "Failed to delete note",
@@ -259,12 +319,65 @@ export default function ClientDetailsPage() {
       })
       router.push("/clients")
     } catch (error) {
+      console.error('Error deleting client:', error)
       toast({
         title: "Error",
         description: "Failed to delete client",
         variant: "destructive"
       })
     }
+  }
+
+  // Quick Actions
+  const handleScheduleJob = () => {
+    const url = `/jobs?client=${client?.id}&clientName=${encodeURIComponent(client?.name || '')}`
+    window.open(url, '_blank')
+  }
+
+  const handleSendEmail = () => {
+    if (!client) return
+    const subject = encodeURIComponent(`Hello ${client.name}`)
+    const body = encodeURIComponent(`Hi ${client.name},\n\nI hope this email finds you well.\n\nBest regards,\nYour Cleaning Service Team`)
+    const mailtoUrl = `mailto:${client.email}?subject=${subject}&body=${body}`
+    window.open(mailtoUrl)
+  }
+
+  const handleSendMessage = () => {
+    if (!client) return
+    const message = encodeURIComponent(`Hi ${client.name}, this is your cleaning service. How can we help you today?`)
+    const smsUrl = `sms:${client.phone}?body=${message}`
+    window.open(smsUrl)
+  }
+
+  const handleCallClient = () => {
+    if (!client) return
+    const phoneUrl = `tel:${client.phone}`
+    window.open(phoneUrl)
+  }
+
+  const handleViewJobs = () => {
+    const url = `/jobs?client=${client?.id}&clientName=${encodeURIComponent(client?.name || '')}`
+    window.open(url, '_blank')
+  }
+
+  const handleViewHistory = () => {
+    const url = `/jobs?client=${client?.id}&clientName=${encodeURIComponent(client?.name || '')}&filter=completed`
+    window.open(url, '_blank')
+  }
+
+  const handleCreateReport = () => {
+    const url = `/reports?client=${client?.id}&clientName=${encodeURIComponent(client?.name || '')}`
+    window.open(url, '_blank')
+  }
+
+  const handleCopyInfo = () => {
+    if (!client) return
+    const clientInfo = `Name: ${client.name}\nEmail: ${client.email}\nPhone: ${client.phone}\nAddress: ${client.address}`
+    navigator.clipboard.writeText(clientInfo)
+    toast({
+      title: "Copied!",
+      description: "Client information copied to clipboard",
+    })
   }
 
   if (loading) {
@@ -374,11 +487,54 @@ export default function ClientDetailsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Quick Actions */}
+      <Card className="border-slate-200">
+        <CardHeader>
+          <CardTitle className="text-slate-900">Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Button variant="outline" onClick={handleScheduleJob} className="h-auto py-3 flex flex-col items-center space-y-1">
+              <Clock className="h-5 w-5" />
+              <span className="text-xs">Schedule Job</span>
+            </Button>
+            <Button variant="outline" onClick={handleViewJobs} className="h-auto py-3 flex flex-col items-center space-y-1">
+              <ExternalLink className="h-5 w-5" />
+              <span className="text-xs">View Jobs</span>
+            </Button>
+            <Button variant="outline" onClick={handleViewHistory} className="h-auto py-3 flex flex-col items-center space-y-1">
+              <History className="h-5 w-5" />
+              <span className="text-xs">View History</span>
+            </Button>
+            <Button variant="outline" onClick={handleSendEmail} className="h-auto py-3 flex flex-col items-center space-y-1">
+              <Mail className="h-5 w-5" />
+              <span className="text-xs">Send Email</span>
+            </Button>
+            <Button variant="outline" onClick={handleSendMessage} className="h-auto py-3 flex flex-col items-center space-y-1">
+              <MessageSquare className="h-5 w-5" />
+              <span className="text-xs">Send SMS</span>
+            </Button>
+            <Button variant="outline" onClick={handleCallClient} className="h-auto py-3 flex flex-col items-center space-y-1">
+              <Phone className="h-5 w-5" />
+              <span className="text-xs">Call Client</span>
+            </Button>
+            <Button variant="outline" onClick={handleCreateReport} className="h-auto py-3 flex flex-col items-center space-y-1">
+              <FileText className="h-5 w-5" />
+              <span className="text-xs">Create Report</span>
+            </Button>
+            <Button variant="outline" onClick={handleCopyInfo} className="h-auto py-3 flex flex-col items-center space-y-1">
+              <Copy className="h-5 w-5" />
+              <span className="text-xs">Copy Info</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Client Information */}
-          <Card className="shadow-lg border-slate-200">
+          <Card className="border-slate-200">
             <CardHeader>
               <CardTitle className="text-slate-900">Client Information</CardTitle>
             </CardHeader>
@@ -451,7 +607,7 @@ export default function ClientDetailsPage() {
           </Card>
 
           {/* Notes */}
-          <Card className="shadow-lg border-slate-200">
+          <Card className="border-slate-200">
             <CardHeader>
               <CardTitle className="text-slate-900">Notes</CardTitle>
               <CardDescription>
@@ -529,7 +685,7 @@ export default function ClientDetailsPage() {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Client Stats */}
-          <Card className="shadow-lg border-slate-200">
+          <Card className="border-slate-200">
             <CardHeader>
               <CardTitle className="text-slate-900">Client Statistics</CardTitle>
             </CardHeader>
@@ -552,7 +708,7 @@ export default function ClientDetailsPage() {
           </Card>
 
           {/* Client Details */}
-          <Card className="shadow-lg border-slate-200">
+          <Card className="border-slate-200">
             <CardHeader>
               <CardTitle className="text-slate-900">Client Details</CardTitle>
             </CardHeader>
@@ -572,26 +728,7 @@ export default function ClientDetailsPage() {
             </CardContent>
           </Card>
 
-          {/* Quick Actions */}
-          <Card className="shadow-lg border-slate-200">
-            <CardHeader>
-              <CardTitle className="text-slate-900">Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Button className="w-full" variant="outline">
-                <Plus className="h-4 w-4 mr-2" />
-                Schedule Job
-              </Button>
-              <Button className="w-full" variant="outline">
-                <Mail className="h-4 w-4 mr-2" />
-                Send Email
-              </Button>
-              <Button className="w-full" variant="outline">
-                <FileText className="h-4 w-4 mr-2" />
-                View Reports
-              </Button>
-            </CardContent>
-          </Card>
+
         </div>
       </div>
     </div>

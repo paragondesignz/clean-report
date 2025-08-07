@@ -15,10 +15,13 @@ import {
   Download, 
   CheckCircle,
   Sparkles,
-  Star
+  Star,
+  ExternalLink
 } from "lucide-react"
 import { formatDate, formatTime } from "@/lib/utils"
 import { supabase } from "@/lib/supabase-client"
+import { downloadBrandedPDF } from "@/lib/pdf-generator"
+import { FeedbackService } from "@/lib/feedback-service"
 import type { Report, Job, Client, UserProfile } from "@/types/database"
 
 export default function PublicReportPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,22 +31,39 @@ export default function PublicReportPage({ params }: { params: Promise<{ id: str
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [feedbackUrl, setFeedbackUrl] = useState<string | null>(null)
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false)
 
   useEffect(() => {
     const fetchReport = async () => {
       try {
         const { id } = await params
         
-        // Fetch report data
-        const { data: reportData, error: reportError } = await supabase
+        let reportData = null
+        
+        // First try to find report by the generated ID in the report_url
+        const { data: urlReportData, error: reportError } = await supabase
           .from('reports')
           .select('*')
-          .eq('id', id)
+          .ilike('report_url', `%${id}`)
           .single()
 
         if (reportError) {
-          setError('Report not found')
-          return
+          // If not found by URL, try direct ID match
+          const { data: directReportData, error: directError } = await supabase
+            .from('reports')
+            .select('*')
+            .eq('id', id)
+            .single()
+
+          if (directError) {
+            setError('Report not found')
+            return
+          }
+
+          reportData = directReportData
+        } else {
+          reportData = urlReportData
         }
 
         setReport(reportData)
@@ -85,6 +105,20 @@ export default function PublicReportPage({ params }: { params: Promise<{ id: str
 
         setUserProfile(profileData)
 
+        // Get feedback URL and status
+        if (jobData) {
+          try {
+            const url = await FeedbackService.getFeedbackUrl(jobData.id)
+            setFeedbackUrl(url)
+            
+            const submitted = await FeedbackService.isFeedbackSubmitted(jobData.id)
+            setFeedbackSubmitted(submitted)
+          } catch (error) {
+            console.error('Error setting up feedback:', error)
+            // Continue without feedback functionality if there's an error
+          }
+        }
+
       } catch (error) {
         console.error('Error fetching report:', error)
         setError('Failed to load report')
@@ -97,46 +131,18 @@ export default function PublicReportPage({ params }: { params: Promise<{ id: str
   }, [params])
 
   const handleDownload = () => {
-    // Generate and download PDF
-    const content = generatePDFContent()
-    const blob = new Blob([content], { type: 'application/pdf' })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `clean-report-${report?.id}.pdf`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    if (!report || !job || !client || !userProfile) return
+    
+    // Generate branded PDF
+    downloadBrandedPDF({
+      job,
+      client,
+      userProfile,
+      report
+    })
   }
 
-  const generatePDFContent = () => {
-    return `
-      ${userProfile?.company_name || 'Clean Report'}
-      ===========================================
-      
-      Cleaning Service Report
-      
-      Job Details:
-      - Service: ${job?.title || 'Unknown'}
-      - Date: ${job ? formatDate(job.scheduled_date) : 'Unknown'}
-      - Time: ${job ? formatTime(job.scheduled_time) : 'Unknown'}
-      - Status: ${job?.status || 'Unknown'}
-      
-      Client Information:
-      - Name: ${client?.name || 'Unknown'}
-      - Email: ${client?.email || 'Unknown'}
-      - Phone: ${client?.phone || 'Unknown'}
-      - Address: ${client?.address || 'Unknown'}
-      
-      Report Information:
-      - Report ID: ${report?.id || 'Unknown'}
-      - Generated: ${report ? formatDate(report.created_at) : 'Unknown'}
-      - Email Sent: ${report?.email_sent ? 'Yes' : 'No'}
-      
-      Thank you for choosing our services!
-    `
-  }
+
 
   if (loading) {
     return (
@@ -299,10 +305,22 @@ export default function PublicReportPage({ params }: { params: Promise<{ id: str
                 <Download className="h-4 w-4 mr-2" />
                 Download PDF
               </Button>
-              <Button variant="outline" className="flex-1">
-                <Star className="h-4 w-4 mr-2" />
-                Rate Service
-              </Button>
+              {feedbackUrl && !feedbackSubmitted ? (
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => window.open(feedbackUrl, '_blank')}
+                >
+                  <Star className="h-4 w-4 mr-2" />
+                  Rate Service
+                  <ExternalLink className="h-4 w-4 ml-2" />
+                </Button>
+              ) : feedbackSubmitted ? (
+                <Button variant="outline" className="flex-1" disabled>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Rating Submitted
+                </Button>
+              ) : null}
             </div>
           </CardContent>
         </Card>

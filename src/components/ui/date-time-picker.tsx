@@ -108,7 +108,7 @@ export function DateTimePicker({
         </Button>
 
         {isCalendarOpen && (
-          <Card className="absolute top-full left-0 right-0 z-50 mt-1 shadow-xl border-slate-200">
+          <Card className="absolute top-full left-0 right-0 z-50 mt-1 border-slate-200">
             <CardContent className="p-4">
               {/* Calendar Header */}
               <div className="flex items-center justify-between mb-4">
@@ -162,7 +162,7 @@ export function DateTimePicker({
                         h-10 w-10 p-0 text-sm font-medium rounded-lg transition-all duration-200
                         ${isOtherMonth ? "text-slate-300" : "text-slate-700"}
                         ${isCurrentDay ? "bg-blue-100 text-blue-700 border-2 border-blue-300" : ""}
-                        ${isSelected ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg" : ""}
+                        ${isSelected ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white" : ""}
                         ${isAvailable && !isSelected && !isCurrentDay ? "hover:bg-slate-100" : ""}
                         ${!isAvailable ? "text-slate-300 cursor-not-allowed" : ""}
                       `}
@@ -194,7 +194,7 @@ export function DateTimePicker({
         </Button>
 
         {isTimeOpen && (
-          <Card className="absolute top-full left-0 right-0 z-50 mt-1 shadow-xl border-slate-200">
+          <Card className="absolute top-full left-0 right-0 z-50 mt-1 border-slate-200">
             <CardContent className="p-4">
               <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
                 {timeSlots.map((time) => (
@@ -209,7 +209,7 @@ export function DateTimePicker({
                     className={`
                       justify-start text-sm font-medium transition-all duration-200
                       ${selectedTime === time 
-                        ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg" 
+                        ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white" 
                         : "hover:bg-slate-100 text-slate-700"
                       }
                     `}

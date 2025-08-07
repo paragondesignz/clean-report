@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -37,10 +37,32 @@ import {
   Eye,
   Pencil,
   Star,
-  StarOff
+  StarOff,
+  ChevronLeft,
+  ChevronRight,
+  ZoomIn,
+  ZoomOut
 } from "lucide-react"
 import { formatDate, formatTime } from "@/lib/utils"
-import { getClients, getJob } from "@/lib/supabase-client"
+import { 
+  getClients, 
+  getJob, 
+  updateJob, 
+  deleteJob,
+  getTasks,
+  createTask,
+  updateTask,
+  deleteTask,
+  getNotes,
+  createNote,
+  updateNote,
+  deleteNote,
+  getPhotosForJob,
+  uploadPhoto,
+  deletePhoto,
+  getPhotoUrl
+} from "@/lib/supabase-client"
+import { JobTimer } from "@/components/job-timer"
 import type { Job, Client, Task, Note, Photo } from "@/types/database"
 
 interface JobWithDetails extends Job {
@@ -67,6 +89,8 @@ export default function JobDetailsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -84,37 +108,35 @@ export default function JobDetailsPage() {
     client_id: ""
   })
 
-  useEffect(() => {
-    if (params.id) {
-      fetchJobDetails(params.id as string)
-      fetchClients()
-    }
-  }, [params.id])
-
-  const fetchJobDetails = async (jobId: string) => {
+  const fetchJobDetails = useCallback(async (jobId: string) => {
     try {
       setLoading(true)
-      // Fetch job details from Supabase
       const jobData = await getJob(jobId)
       if (jobData) {
         setJob(jobData)
-        const initialFormData = {
+        setFormData({
           title: jobData.title,
-          description: jobData.description,
+          description: jobData.description || "",
           scheduled_date: jobData.scheduled_date,
-          scheduled_time: jobData.scheduled_time,
+          scheduled_time: jobData.scheduled_time || "",
           status: jobData.status,
           client_id: jobData.client_id
-        }
-        setFormData(initialFormData)
-        setOriginalFormData(initialFormData)
+        })
+        setOriginalFormData({
+          title: jobData.title,
+          description: jobData.description || "",
+          scheduled_date: jobData.scheduled_date,
+          scheduled_time: jobData.scheduled_time || "",
+          status: jobData.status,
+          client_id: jobData.client_id
+        })
       } else {
         toast({
           title: "Error",
           description: "Job not found",
           variant: "destructive"
         })
-        router.push('/jobs')
+        router.push("/jobs")
       }
     } catch (error) {
       console.error('Error fetching job details:', error)
@@ -126,21 +148,23 @@ export default function JobDetailsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast, router])
 
-  const fetchClients = async () => {
+  const fetchClients = useCallback(async () => {
     try {
-      const data = await getClients()
-      setClients(data || [])
+      const clientsData = await getClients()
+      setClients(clientsData || [])
     } catch (error) {
       console.error('Error fetching clients:', error)
-      toast({
-        title: "Error",
-        description: "Failed to load clients",
-        variant: "destructive"
-      })
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (params.id) {
+      fetchJobDetails(params.id as string)
+      fetchClients()
+    }
+  }, [params.id, fetchJobDetails, fetchClients])
 
   const hasUnsavedChanges = () => {
     return JSON.stringify(formData) !== JSON.stringify(originalFormData)
@@ -148,17 +172,27 @@ export default function JobDetailsPage() {
 
   const handleSave = async () => {
     if (!job) return
-    
+
     try {
-      // TODO: Save job to Supabase
-      setJob({ ...job, ...formData })
-      setOriginalFormData({ ...formData })
-      setIsEditing(false)
+      await updateJob(job.id, {
+        title: formData.title,
+        description: formData.description,
+        scheduled_date: formData.scheduled_date,
+        scheduled_time: formData.scheduled_time,
+        status: formData.status,
+        client_id: formData.client_id
+      })
+
       toast({
         title: "Success",
         description: "Job updated successfully"
       })
+
+      setOriginalFormData(formData)
+      setIsEditing(false)
+      fetchJobDetails(job.id)
     } catch (error) {
+      console.error('Error updating job:', error)
       toast({
         title: "Error",
         description: "Failed to update job",
@@ -168,21 +202,12 @@ export default function JobDetailsPage() {
   }
 
   const handleCancel = () => {
-    if (job) {
-      setFormData({
-        title: job.title,
-        description: job.description,
-        scheduled_date: job.scheduled_date,
-        scheduled_time: job.scheduled_time,
-        status: job.status,
-        client_id: job.client_id
-      })
-    }
+    setFormData(originalFormData)
     setIsEditing(false)
   }
 
   const handleNavigation = (path: string) => {
-    if (isEditing && hasUnsavedChanges()) {
+    if (hasUnsavedChanges()) {
       setPendingNavigation(path)
       setIsUnsavedChangesDialogOpen(true)
     } else {
@@ -194,8 +219,6 @@ export default function JobDetailsPage() {
     if (pendingNavigation) {
       router.push(pendingNavigation)
     }
-    setIsUnsavedChangesDialogOpen(false)
-    setPendingNavigation(null)
   }
 
   const handleCancelNavigation = () => {
@@ -205,16 +228,16 @@ export default function JobDetailsPage() {
 
   const handleStatusChange = async (newStatus: Job['status']) => {
     if (!job) return
-    
+
     try {
-      // TODO: Update job status in Supabase
-      setJob({ ...job, status: newStatus })
-      setFormData({ ...formData, status: newStatus })
+      await updateJob(job.id, { status: newStatus })
       toast({
         title: "Success",
-        description: `Job status updated to ${newStatus.replace('_', ' ')}`
+        description: "Job status updated successfully"
       })
+      fetchJobDetails(job.id)
     } catch (error) {
+      console.error('Error updating job status:', error)
       toast({
         title: "Error",
         description: "Failed to update job status",
@@ -223,17 +246,21 @@ export default function JobDetailsPage() {
     }
   }
 
-  // Task Management Functions
   const handleTaskToggle = async (taskId: string) => {
     if (!job) return
-    
+
     try {
-      // TODO: Update task completion in Supabase
-      const updatedTasks = job.tasks?.map(task => 
-        task.id === taskId ? { ...task, is_completed: !task.is_completed } : task
-      )
-      setJob({ ...job, tasks: updatedTasks })
+      const task = job.tasks?.find(t => t.id === taskId)
+      if (task) {
+              await updateTask(taskId, { is_completed: !task.is_completed })
+      toast({
+        title: "Success",
+        description: `Task ${task.is_completed ? 'unmarked' : 'marked'} as complete`
+      })
+        fetchJobDetails(job.id)
+      }
     } catch (error) {
+      console.error('Error updating task:', error)
       toast({
         title: "Error",
         description: "Failed to update task",
@@ -244,29 +271,27 @@ export default function JobDetailsPage() {
 
   const handleAddTask = async () => {
     if (!job || !newTask.title.trim()) return
-    
+
     try {
-      // TODO: Add task to Supabase
-      const newTaskObj: Task = {
-        id: `task-${Date.now()}`,
+      // Calculate order_index for the new task (last position)
+      const maxOrder = job.tasks?.length ? Math.max(...job.tasks.map(t => t.order_index || 0)) : 0
+      
+      await createTask({
         job_id: job.id,
         title: newTask.title,
         description: newTask.description,
-        is_completed: false,
-        order_index: (job.tasks?.length || 0) + 1,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-      setJob({ 
-        ...job, 
-        tasks: [...(job.tasks || []), newTaskObj] 
+        order_index: maxOrder + 1
       })
-      setNewTask({ title: "", description: "" })
+
       toast({
         title: "Success",
         description: "Task added successfully"
       })
+
+      setNewTask({ title: "", description: "" })
+      fetchJobDetails(job.id)
     } catch (error) {
+      console.error('Error adding task:', error)
       toast({
         title: "Error",
         description: "Failed to add task",
@@ -280,20 +305,25 @@ export default function JobDetailsPage() {
   }
 
   const handleSaveTask = async () => {
-    if (!job || !editingTask) return
-    
+    if (!editingTask) return
+
     try {
-      // TODO: Update task in Supabase
-      const updatedTasks = job.tasks?.map(task => 
-        task.id === editingTask.id ? { ...editingTask, updated_at: new Date().toISOString() } : task
-      )
-      setJob({ ...job, tasks: updatedTasks })
-      setEditingTask(null)
+      await updateTask(editingTask.id, {
+        title: editingTask.title,
+        description: editingTask.description
+      })
+
       toast({
         title: "Success",
         description: "Task updated successfully"
       })
+
+      setEditingTask(null)
+      if (job) {
+        fetchJobDetails(job.id)
+      }
     } catch (error) {
+      console.error('Error updating task:', error)
       toast({
         title: "Error",
         description: "Failed to update task",
@@ -304,16 +334,16 @@ export default function JobDetailsPage() {
 
   const handleDeleteTask = async (taskId: string) => {
     if (!job) return
-    
+
     try {
-      // TODO: Delete task from Supabase
-      const updatedTasks = job.tasks?.filter(task => task.id !== taskId)
-      setJob({ ...job, tasks: updatedTasks })
+      await deleteTask(taskId)
       toast({
         title: "Success",
         description: "Task deleted successfully"
       })
+      fetchJobDetails(job.id)
     } catch (error) {
+      console.error('Error deleting task:', error)
       toast({
         title: "Error",
         description: "Failed to delete task",
@@ -322,29 +352,24 @@ export default function JobDetailsPage() {
     }
   }
 
-  // Note Management Functions
   const handleAddNote = async () => {
     if (!job || !newNote.trim()) return
-    
+
     try {
-      // TODO: Add note to Supabase
-      const newNoteObj: Note = {
-        id: `note-${Date.now()}`,
+      await createNote({
         job_id: job.id,
-        content: newNote,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-      setJob({ 
-        ...job, 
-        notes: [...(job.notes || []), newNoteObj] 
+        content: newNote
       })
-      setNewNote("")
+
       toast({
         title: "Success",
         description: "Note added successfully"
       })
+
+      setNewNote("")
+      fetchJobDetails(job.id)
     } catch (error) {
+      console.error('Error adding note:', error)
       toast({
         title: "Error",
         description: "Failed to add note",
@@ -358,20 +383,24 @@ export default function JobDetailsPage() {
   }
 
   const handleSaveNote = async () => {
-    if (!job || !editingNote) return
-    
+    if (!editingNote) return
+
     try {
-      // TODO: Update note in Supabase
-      const updatedNotes = job.notes?.map(note => 
-        note.id === editingNote.id ? { ...editingNote, updated_at: new Date().toISOString() } : note
-      )
-      setJob({ ...job, notes: updatedNotes })
-      setEditingNote(null)
+      await updateNote(editingNote.id, {
+        content: editingNote.content
+      })
+
       toast({
         title: "Success",
         description: "Note updated successfully"
       })
+
+      setEditingNote(null)
+      if (job) {
+        fetchJobDetails(job.id)
+      }
     } catch (error) {
+      console.error('Error updating note:', error)
       toast({
         title: "Error",
         description: "Failed to update note",
@@ -382,16 +411,16 @@ export default function JobDetailsPage() {
 
   const handleDeleteNote = async (noteId: string) => {
     if (!job) return
-    
+
     try {
-      // TODO: Delete note from Supabase
-      const updatedNotes = job.notes?.filter(note => note.id !== noteId)
-      setJob({ ...job, notes: updatedNotes })
+      await deleteNote(noteId)
       toast({
         title: "Success",
         description: "Note deleted successfully"
       })
+      fetchJobDetails(job.id)
     } catch (error) {
+      console.error('Error deleting note:', error)
       toast({
         title: "Error",
         description: "Failed to delete note",
@@ -400,7 +429,6 @@ export default function JobDetailsPage() {
     }
   }
 
-  // Photo Management Functions
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
     setSelectedFiles(files)
@@ -408,29 +436,23 @@ export default function JobDetailsPage() {
 
   const handleUploadPhotos = async () => {
     if (!job || selectedFiles.length === 0) return
-    
+
     try {
       setUploadingPhotos(true)
-      // TODO: Upload photos to Supabase storage
-      const newPhotos: Photo[] = selectedFiles.map((file, index) => ({
-        id: `photo-${Date.now()}-${index}`,
-        task_id: job.tasks?.[0]?.id || "",
-        file_path: `/api/photos/${file.name}`,
-        file_name: file.name,
-        file_size: file.size,
-        created_at: new Date().toISOString()
-      }))
       
-      setJob({ 
-        ...job, 
-        photos: [...(job.photos || []), ...newPhotos] 
-      })
-      setSelectedFiles([])
+      for (const file of selectedFiles) {
+        await uploadPhoto(job.id, file)
+      }
+
       toast({
         title: "Success",
         description: `${selectedFiles.length} photo(s) uploaded successfully`
       })
+
+      setSelectedFiles([])
+      fetchJobDetails(job.id)
     } catch (error) {
+      console.error('Error uploading photos:', error)
       toast({
         title: "Error",
         description: "Failed to upload photos",
@@ -443,16 +465,16 @@ export default function JobDetailsPage() {
 
   const handleDeletePhoto = async (photoId: string) => {
     if (!job) return
-    
+
     try {
-      // TODO: Delete photo from Supabase storage
-      const updatedPhotos = job.photos?.filter(photo => photo.id !== photoId)
-      setJob({ ...job, photos: updatedPhotos })
+      await deletePhoto(photoId)
       toast({
         title: "Success",
         description: "Photo deleted successfully"
       })
+      fetchJobDetails(job.id)
     } catch (error) {
+      console.error('Error deleting photo:', error)
       toast({
         title: "Error",
         description: "Failed to delete photo",
@@ -465,13 +487,16 @@ export default function JobDetailsPage() {
     if (!job) return
     
     try {
-      // TODO: Delete job from Supabase
+      // Delete job from Supabase
+      await deleteJob(job.id)
+      
       toast({
         title: "Success",
         description: "Job deleted successfully"
       })
       router.push("/jobs")
     } catch (error) {
+      console.error('Error deleting job:', error)
       toast({
         title: "Error",
         description: "Failed to delete job",
@@ -479,6 +504,52 @@ export default function JobDetailsPage() {
       })
     }
   }
+
+  const handleJobUpdate = () => {
+    // Refresh job data when timer updates
+    if (job) {
+      fetchJobDetails(job.id)
+    }
+  }
+
+  const openLightbox = (photoIndex: number) => {
+    setCurrentPhotoIndex(photoIndex)
+    setLightboxOpen(true)
+  }
+
+  const closeLightbox = () => {
+    setLightboxOpen(false)
+  }
+
+  const nextPhoto = () => {
+    if (job?.photos && currentPhotoIndex < job.photos.length - 1) {
+      setCurrentPhotoIndex(currentPhotoIndex + 1)
+    }
+  }
+
+  const prevPhoto = () => {
+    if (currentPhotoIndex > 0) {
+      setCurrentPhotoIndex(currentPhotoIndex - 1)
+    }
+  }
+
+  const handleKeyPress = (e: KeyboardEvent) => {
+    if (!lightboxOpen) return
+    
+    if (e.key === 'Escape') {
+      closeLightbox()
+    } else if (e.key === 'ArrowRight') {
+      nextPhoto()
+    } else if (e.key === 'ArrowLeft') {
+      prevPhoto()
+    }
+  }
+
+  // Add keyboard event listeners
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyPress)
+    return () => document.removeEventListener('keydown', handleKeyPress)
+  }, [lightboxOpen, currentPhotoIndex])
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -497,16 +568,11 @@ export default function JobDetailsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'scheduled':
-        return 'bg-blue-100 text-blue-800'
-      case 'in_progress':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'completed':
-        return 'bg-green-100 text-green-800'
-      case 'cancelled':
-        return 'bg-red-100 text-red-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
+      case 'scheduled': return 'bg-blue-100 text-blue-800'
+      case 'in_progress': return 'bg-yellow-100 text-yellow-800'
+      case 'completed': return 'bg-green-100 text-green-800'
+      case 'cancelled': return 'bg-red-100 text-red-800'
+      default: return 'bg-gray-100 text-gray-800'
     }
   }
 
@@ -522,8 +588,8 @@ export default function JobDetailsPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="mt-2 text-slate-600">Loading job details...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading job details...</p>
         </div>
       </div>
     )
@@ -532,9 +598,9 @@ export default function JobDetailsPage() {
   if (!job) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-2xl font-bold text-slate-900 mb-4">Job Not Found</h2>
-        <p className="text-slate-600 mb-6">The job you're looking for doesn't exist or has been deleted.</p>
-        <Button onClick={() => router.push("/jobs")}>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Job Not Found</h2>
+        <p className="text-gray-600 mb-6">The job you're looking for doesn't exist or has been deleted.</p>
+        <Button onClick={() => router.push("/jobs")} className="bg-gray-900 hover:bg-gray-800 text-white">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Jobs
         </Button>
@@ -543,7 +609,7 @@ export default function JobDetailsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
@@ -552,16 +618,16 @@ export default function JobDetailsPage() {
             Back to Jobs
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">
+            <h1 className="text-3xl font-bold text-gray-900">
               {isEditing ? "Edit Job" : job.title}
             </h1>
-            <p className="text-slate-600">Job Details</p>
+            <p className="text-gray-600">Job Details</p>
           </div>
         </div>
         <div className="flex items-center space-x-2">
           {isEditing ? (
             <>
-              <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700">
+              <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700 text-white">
                 <Save className="h-4 w-4 mr-2" />
                 Save Changes
               </Button>
@@ -629,9 +695,9 @@ export default function JobDetailsPage() {
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Job Information */}
-          <Card className="shadow-lg border-slate-200">
+          <Card className="crm-card">
             <CardHeader>
-              <CardTitle className="text-slate-900">Job Information</CardTitle>
+              <CardTitle className="text-gray-900">Job Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               {isEditing ? (
@@ -680,57 +746,69 @@ export default function JobDetailsPage() {
                     </div>
                   </div>
                   
-                  <div>
-                    <Label htmlFor="client_id">Client</Label>
-                    <Select
-                      value={formData.client_id}
-                      onValueChange={(value) => setFormData({ ...formData, client_id: value })}
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select a client" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {clients.map((client) => (
-                          <SelectItem key={client.id} value={client.id}>
-                            {client.name} - {client.email}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="status">Status</Label>
-                    <Select
-                      value={formData.status}
-                      onValueChange={(value) => setFormData({ ...formData, status: value as Job['status'] })}
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="scheduled">Scheduled</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="client_id">Client</Label>
+                      <Select value={formData.client_id} onValueChange={(value) => setFormData({ ...formData, client_id: value })}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select a client" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {clients.map((client) => (
+                            <SelectItem key={client.id} value={client.id}>
+                              {client.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="status">Status</Label>
+                      <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value as Job['status'] })}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="scheduled">Scheduled</SelectItem>
+                          <SelectItem value="in_progress">In Progress</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div>
-                    <h4 className="font-medium mb-2">Description</h4>
-                    <p className="text-slate-600">{job.description}</p>
+                    <h3 className="font-medium text-gray-900">Description</h3>
+                    <p className="text-gray-600 mt-1">{job.description || "No description provided"}</p>
                   </div>
+                  
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <h4 className="font-medium mb-2">Scheduled Date</h4>
-                      <p className="text-slate-600">{formatDate(job.scheduled_date)}</p>
+                      <h3 className="font-medium text-gray-900">Scheduled Date</h3>
+                      <p className="text-gray-600 mt-1">{formatDate(job.scheduled_date)}</p>
                     </div>
                     <div>
-                      <h4 className="font-medium mb-2">Scheduled Time</h4>
-                      <p className="text-slate-600">{formatTime(job.scheduled_time)}</p>
+                      <h3 className="font-medium text-gray-900">Scheduled Time</h3>
+                      <p className="text-gray-600 mt-1">{formatTime(job.scheduled_time)}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <h3 className="font-medium text-gray-900">Client</h3>
+                      <p className="text-gray-600 mt-1">{job.client?.name || "Unknown Client"}</p>
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-gray-900">Status</h3>
+                      <div className="flex items-center space-x-2 mt-1">
+                        {getStatusIcon(job.status)}
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(job.status)}`}>
+                          {job.status.replace('_', ' ')}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -738,51 +816,24 @@ export default function JobDetailsPage() {
             </CardContent>
           </Card>
 
-          {/* Client Information */}
-          <Card className="shadow-lg border-slate-200">
-            <CardHeader>
-              <CardTitle className="text-slate-900">Client Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center">
-                <User className="h-4 w-4 mr-2 text-slate-500" />
-                <span>{job.client?.name}</span>
-              </div>
-              <div className="flex items-center">
-                <MapPin className="h-4 w-4 mr-2 text-slate-500" />
-                <span>{job.client?.address}</span>
-              </div>
-              <div className="flex items-center">
-                <Calendar className="h-4 w-4 mr-2 text-slate-500" />
-                <span>{job.client?.email}</span>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Tasks */}
-          <Card className="shadow-lg border-slate-200">
+          <Card className="crm-card">
             <CardHeader>
-              <CardTitle className="text-slate-900">Tasks</CardTitle>
+              <CardTitle className="text-gray-900">Tasks</CardTitle>
               <CardDescription>
-                Track the progress of individual cleaning tasks
+                Manage job tasks and checklists
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
                 {job.tasks?.map((task) => (
-                  <div key={task.id} className="flex items-center space-x-3 p-4 border border-slate-200 rounded-lg">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleTaskToggle(task.id)}
-                      className={task.is_completed ? "text-green-600" : "text-slate-400"}
-                    >
-                      {task.is_completed ? (
-                        <CheckCircle className="h-4 w-4" />
-                      ) : (
-                        <div className="h-4 w-4 border-2 border-slate-300 rounded" />
-                      )}
-                    </Button>
+                  <div key={task.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                    <input
+                      type="checkbox"
+                      checked={task.is_completed}
+                      onChange={() => handleTaskToggle(task.id)}
+                      className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                    />
                     <div className="flex-1">
                       {editingTask?.id === task.id ? (
                         <div className="space-y-2">
@@ -798,7 +849,7 @@ export default function JobDetailsPage() {
                             className="text-sm"
                           />
                           <div className="flex space-x-2">
-                            <Button size="sm" onClick={handleSaveTask}>
+                            <Button size="sm" onClick={handleSaveTask} className="bg-green-600 hover:bg-green-700 text-white">
                               <Save className="h-3 w-3 mr-1" />
                               Save
                             </Button>
@@ -810,22 +861,24 @@ export default function JobDetailsPage() {
                         </div>
                       ) : (
                         <>
-                          <h4 className={`font-medium ${task.is_completed ? 'line-through text-slate-500' : 'text-slate-900'}`}>
-                            {task.title}
-                          </h4>
-                          <p className={`text-sm ${task.is_completed ? 'text-slate-400' : 'text-slate-600'}`}>
+                                                  <h4 className={`font-medium ${task.is_completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                          {task.title}
+                        </h4>
+                        {task.description && (
+                          <p className={`text-sm ${task.is_completed ? 'text-gray-400' : 'text-gray-600'}`}>
                             {task.description}
                           </p>
+                        )}
                         </>
                       )}
                     </div>
-                    {!editingTask && (
-                      <div className="flex items-center space-x-1">
+                    {editingTask?.id !== task.id && (
+                      <div className="flex space-x-1">
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEditTask(task)}
-                          className="text-blue-600 hover:text-blue-700"
+                          className="text-blue-600 hover:text-blue-700 h-6 px-2"
                         >
                           <Pencil className="h-3 w-3" />
                         </Button>
@@ -833,7 +886,7 @@ export default function JobDetailsPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDeleteTask(task.id)}
-                          className="text-red-600 hover:text-red-700"
+                          className="text-red-600 hover:text-red-700 h-6 px-2"
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -841,46 +894,36 @@ export default function JobDetailsPage() {
                     )}
                   </div>
                 ))}
-                
-                {isEditing && (
-                  <div className="p-4 border-2 border-dashed border-slate-300 rounded-lg">
-                    <div className="space-y-3">
-                      <div>
-                        <Label htmlFor="new-task-title">Task Title</Label>
-                        <Input
-                          id="new-task-title"
-                          value={newTask.title}
-                          onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                          placeholder="Enter task title"
-                          className="mt-1"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="new-task-description">Task Description</Label>
-                        <Textarea
-                          id="new-task-description"
-                          value={newTask.description}
-                          onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                          placeholder="Enter task description"
-                          rows={2}
-                          className="mt-1"
-                        />
-                      </div>
-                      <Button onClick={handleAddTask} disabled={!newTask.title.trim()}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Task
-                      </Button>
-                    </div>
-                  </div>
-                )}
               </div>
+              
+              {!isEditing && (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Task title"
+                    value={newTask.title}
+                    onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                    className="mt-1"
+                  />
+                  <Textarea
+                    placeholder="Task description (optional)"
+                    value={newTask.description}
+                    onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                    rows={2}
+                    className="mt-1"
+                  />
+                  <Button onClick={handleAddTask} disabled={!newTask.title.trim()} className="bg-gray-900 hover:bg-gray-800 text-white">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Task
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Notes */}
-          <Card className="shadow-lg border-slate-200">
+          <Card className="crm-card">
             <CardHeader>
-              <CardTitle className="text-slate-900">Notes</CardTitle>
+              <CardTitle className="text-gray-900">Notes</CardTitle>
               <CardDescription>
                 Add notes and observations about the job
               </CardDescription>
@@ -893,13 +936,13 @@ export default function JobDetailsPage() {
                   onChange={(e) => setNewNote(e.target.value)}
                   className="flex-1"
                 />
-                <Button onClick={handleAddNote} disabled={!newNote.trim()}>
+                <Button onClick={handleAddNote} disabled={!newNote.trim()} className="bg-gray-900 hover:bg-gray-800 text-white">
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
               <div className="space-y-3">
                 {job.notes?.slice().reverse().map((note) => (
-                  <div key={note.id} className="p-3 bg-slate-50 rounded-lg">
+                  <div key={note.id} className="p-3 bg-gray-50 rounded-lg">
                     {editingNote?.id === note.id ? (
                       <div className="space-y-2">
                         <Textarea
@@ -908,7 +951,7 @@ export default function JobDetailsPage() {
                           rows={3}
                         />
                         <div className="flex space-x-2">
-                          <Button size="sm" onClick={handleSaveNote}>
+                          <Button size="sm" onClick={handleSaveNote} className="bg-green-600 hover:bg-green-700 text-white">
                             <Save className="h-3 w-3 mr-1" />
                             Save
                           </Button>
@@ -920,9 +963,9 @@ export default function JobDetailsPage() {
                       </div>
                     ) : (
                       <>
-                        <p className="text-sm text-slate-700">{note.content}</p>
+                        <p className="text-sm text-gray-700">{note.content}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-gray-500">
                             {new Date(note.created_at).toLocaleString()}
                           </p>
                           <div className="flex space-x-1">
@@ -953,19 +996,19 @@ export default function JobDetailsPage() {
           </Card>
 
           {/* Photos */}
-          <Card className="shadow-lg border-slate-200">
+          <Card className="crm-card">
             <CardHeader>
-              <CardTitle className="text-slate-900">Photos</CardTitle>
+              <CardTitle className="text-gray-900">Photos</CardTitle>
               <CardDescription>
                 Upload and manage job photos
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Upload Section */}
-              <div className="p-4 border-2 border-dashed border-slate-300 rounded-lg">
+              <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg">
                 <div className="text-center">
-                  <Upload className="h-8 w-8 text-slate-400 mx-auto mb-2" />
-                  <p className="text-sm text-slate-600 mb-2">Upload job photos</p>
+                  <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-600 mb-2">Upload job photos</p>
                   <input
                     type="file"
                     multiple
@@ -989,8 +1032,8 @@ export default function JobDetailsPage() {
                     <div className="space-y-1">
                       {selectedFiles.map((file, index) => (
                         <div key={index} className="flex items-center justify-between text-sm">
-                          <span className="text-slate-600">{file.name}</span>
-                          <span className="text-slate-500">{formatFileSize(file.size)}</span>
+                          <span className="text-gray-600">{file.name}</span>
+                          <span className="text-gray-500">{formatFileSize(file.size)}</span>
                         </div>
                       ))}
                     </div>
@@ -999,6 +1042,7 @@ export default function JobDetailsPage() {
                         onClick={handleUploadPhotos} 
                         disabled={uploadingPhotos}
                         size="sm"
+                        className="bg-gray-900 hover:bg-gray-800 text-white"
                       >
                         {uploadingPhotos ? (
                           <>
@@ -1027,31 +1071,60 @@ export default function JobDetailsPage() {
               {/* Photo Grid */}
               {job.photos && job.photos.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {job.photos.map((photo) => (
+                  {job.photos.map((photo, index) => (
                     <div key={photo.id} className="relative group">
-                      <div className="aspect-square bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
-                        <Image className="h-6 w-6 text-slate-400" />
+                      <div 
+                        className="aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer"
+                        onClick={() => openLightbox(index)}
+                      >
+                        <img
+                          src={getPhotoUrl(photo.file_path)}
+                          alt={`Job photo ${photo.file_name}`}
+                          className="w-full h-full object-cover hover:scale-105 transition-transform duration-200"
+                        />
                       </div>
                       <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 rounded-lg flex items-center justify-center">
                         <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-2">
-                          <Button size="sm" variant="secondary">
+                          <Button 
+                            size="sm" 
+                            variant="secondary"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openLightbox(index)
+                            }}
+                          >
                             <Eye className="h-3 w-3" />
                           </Button>
-                          <Button size="sm" variant="secondary">
+                          <Button 
+                            size="sm" 
+                            variant="secondary"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const link = document.createElement('a');
+                              link.href = getPhotoUrl(photo.file_path);
+                              link.download = photo.file_name;
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                            }}
+                          >
                             <Download className="h-3 w-3" />
                           </Button>
                           <Button 
                             size="sm" 
                             variant="destructive"
-                            onClick={() => handleDeletePhoto(photo.id)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeletePhoto(photo.id)
+                            }}
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
                       </div>
                       <div className="mt-1">
-                        <p className="text-xs text-slate-600 truncate">{photo.file_name}</p>
-                        <p className="text-xs text-slate-500">{formatFileSize(photo.file_size)}</p>
+                        <p className="text-xs text-gray-600 truncate">{photo.file_name}</p>
+                        <p className="text-xs text-gray-500">{formatFileSize(photo.file_size)}</p>
                       </div>
                     </div>
                   ))}
@@ -1063,16 +1136,19 @@ export default function JobDetailsPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
+          {/* Job Timer */}
+          <JobTimer job={job} onJobUpdate={handleJobUpdate} />
+
           {/* Job Status */}
-          <Card className="shadow-lg border-slate-200">
+          <Card className="crm-card">
             <CardHeader>
-              <CardTitle className="text-slate-900">Job Status</CardTitle>
+              <CardTitle className="text-gray-900">Job Status</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center space-x-3">
                 {getStatusIcon(job.status)}
                 <div>
-                  <h3 className="font-medium">Status</h3>
+                  <h3 className="font-medium text-gray-900">Status</h3>
                   <Badge className={getStatusColor(job.status)}>
                     {job.status.replace('_', ' ')}
                   </Badge>
@@ -1123,20 +1199,20 @@ export default function JobDetailsPage() {
           </Card>
 
           {/* Quick Actions */}
-          <Card className="shadow-lg border-slate-200">
+          <Card className="crm-card">
             <CardHeader>
-              <CardTitle className="text-slate-900">Quick Actions</CardTitle>
+              <CardTitle className="text-gray-900">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Button className="w-full" variant="outline">
+              <Button className="w-full justify-start" variant="outline">
                 <Camera className="h-4 w-4 mr-2" />
                 Add Photos
               </Button>
-              <Button className="w-full" variant="outline">
+              <Button className="w-full justify-start" variant="outline">
                 <FileText className="h-4 w-4 mr-2" />
                 Generate Report
               </Button>
-              <Button className="w-full" variant="outline">
+              <Button className="w-full justify-start" variant="outline">
                 <MessageSquare className="h-4 w-4 mr-2" />
                 Send Feedback Request
               </Button>
@@ -1144,6 +1220,112 @@ export default function JobDetailsPage() {
           </Card>
         </div>
       </div>
+
+      {/* Lightbox Modal */}
+      {lightboxOpen && job?.photos && job.photos.length > 0 && (
+        <>
+          {/* Backdrop with blur effect */}
+          <div 
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md"
+            onClick={closeLightbox}
+          />
+          
+          {/* Lightbox content */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Close button */}
+            <button
+              onClick={closeLightbox}
+              className="absolute top-6 right-6 z-60 p-3 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all duration-200 backdrop-blur-sm"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            {/* Navigation arrows */}
+            {currentPhotoIndex > 0 && (
+              <button
+                onClick={prevPhoto}
+                className="absolute left-6 top-1/2 -translate-y-1/2 z-60 p-3 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all duration-200 backdrop-blur-sm"
+              >
+                <ChevronLeft className="h-8 w-8" />
+              </button>
+            )}
+            
+            {currentPhotoIndex < job.photos.length - 1 && (
+              <button
+                onClick={nextPhoto}
+                className="absolute right-6 top-1/2 -translate-y-1/2 z-60 p-3 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all duration-200 backdrop-blur-sm"
+              >
+                <ChevronRight className="h-8 w-8" />
+              </button>
+            )}
+
+            {/* Image container with better sizing */}
+            <div className="relative max-w-4xl max-h-[85vh] w-full h-full flex items-center justify-center">
+              <img
+                src={getPhotoUrl(job.photos[currentPhotoIndex].file_path)}
+                alt={`Job photo ${job.photos[currentPhotoIndex].file_name}`}
+                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+
+            {/* Photo info bar with elegant styling */}
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-md text-white px-6 py-3 rounded-full border border-white/20">
+              <div className="flex items-center space-x-3 text-sm font-medium">
+                <span className="text-white/90">
+                  {currentPhotoIndex + 1} of {job.photos.length}
+                </span>
+                <span className="text-white/50">•</span>
+                <span className="text-white/80 truncate max-w-48">
+                  {job.photos[currentPhotoIndex].file_name}
+                </span>
+                <span className="text-white/50">•</span>
+                <span className="text-white/70">
+                  {formatFileSize(job.photos[currentPhotoIndex].file_size)}
+                </span>
+              </div>
+            </div>
+
+            {/* Action buttons with elegant styling */}
+            <div className="absolute top-6 left-6 flex space-x-3">
+              <Button
+                size="sm"
+                variant="secondary"
+                className="bg-white/10 backdrop-blur-md border-white/20 text-white hover:bg-white/20 hover:text-white transition-all duration-200"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const link = document.createElement('a');
+                  link.href = getPhotoUrl(job.photos[currentPhotoIndex].file_path);
+                  link.download = job.photos[currentPhotoIndex].file_name;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="bg-red-500/20 backdrop-blur-md border-red-500/30 text-red-100 hover:bg-red-500/30 hover:text-white transition-all duration-200"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeletePhoto(job.photos[currentPhotoIndex].id);
+                  if (job.photos.length === 1) {
+                    closeLightbox();
+                  } else if (currentPhotoIndex === job.photos.length - 1) {
+                    setCurrentPhotoIndex(currentPhotoIndex - 1);
+                  }
+                }}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
-} 
+}

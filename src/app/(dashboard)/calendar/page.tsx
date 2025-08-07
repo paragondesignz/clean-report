@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -13,12 +13,12 @@ import {
   Plus,
   Clock,
   User,
-  MapPin,
   RefreshCw,
-  ExternalLink,
-  Settings
+  Settings,
+  ArrowRight
 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import type { Job, Client, CalendarIntegration, JobWithClient } from "@/types/database"
 import { 
   syncJobsWithGoogleCalendar,
@@ -41,17 +41,14 @@ interface CalendarEvent {
 export default function CalendarPage() {
   const { user } = useAuth()
   const { toast } = useToast()
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [calendarIntegration, setCalendarIntegration] = useState<CalendarIntegration | null>(null)
   const [syncing, setSyncing] = useState(false)
 
-  useEffect(() => {
-    loadCalendarData()
-  }, [currentDate])
-
-  const loadCalendarData = async () => {
+  const loadCalendarData = useCallback(async () => {
     setLoading(true)
     try {
       // Fetch jobs from Supabase
@@ -76,7 +73,7 @@ export default function CalendarPage() {
           setCalendarIntegration(calendarData)
         }
       } catch (error) {
-        console.log("No calendar integration found")
+        console.log("No calendar integration found:", error)
       }
     } catch (error) {
       console.error('Error loading calendar data:', error)
@@ -88,7 +85,11 @@ export default function CalendarPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
+
+  useEffect(() => {
+    loadCalendarData()
+  }, [currentDate, loadCalendarData])
 
   const syncWithGoogleCalendar = async () => {
     setSyncing(true)
@@ -153,6 +154,7 @@ export default function CalendarPage() {
         })
       }
     } catch (error) {
+      console.error('Error syncing with Google Calendar:', error)
       toast({
         title: "Sync failed",
         description: "Failed to sync with Google Calendar. Please check your settings.",
@@ -212,6 +214,12 @@ export default function CalendarPage() {
       minute: '2-digit',
       hour12: true
     })
+  }
+
+  const handleEventClick = (event: CalendarEvent) => {
+    if (event.type === 'job') {
+      router.push(`/jobs/${event.id}`)
+    }
   }
 
   const days = getDaysInMonth(currentDate)
@@ -333,8 +341,9 @@ export default function CalendarPage() {
                       {getEventsForDate(day).map(event => (
                         <div
                           key={event.id}
-                          className="text-xs p-1 rounded cursor-pointer hover:bg-blue-50"
+                          className="text-xs p-1 rounded cursor-pointer hover:bg-blue-50 transition-colors"
                           title={`${event.title} - ${formatTime(event.time)}`}
+                          onClick={() => handleEventClick(event)}
                         >
                           <div className="flex items-center space-x-1">
                             <Clock className="h-3 w-3 text-gray-400" />
@@ -370,7 +379,11 @@ export default function CalendarPage() {
               .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
               .slice(0, 5)
               .map(event => (
-                <div key={event.id} className="flex items-center justify-between p-3 border rounded-lg">
+                <div 
+                  key={event.id} 
+                  className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => handleEventClick(event)}
+                >
                   <div className="flex items-center space-x-3">
                     <div className="text-center">
                       <div className="text-sm font-medium text-gray-500">
@@ -394,9 +407,12 @@ export default function CalendarPage() {
                       </div>
                     </div>
                   </div>
-                  <Badge className={getStatusColor(event.status)}>
-                    {event.status.replace('_', ' ')}
-                  </Badge>
+                  <div className="flex items-center space-x-2">
+                    <Badge className={getStatusColor(event.status)}>
+                      {event.status.replace('_', ' ')}
+                    </Badge>
+                    <ArrowRight className="h-4 w-4 text-gray-400" />
+                  </div>
                 </div>
               ))}
           </div>

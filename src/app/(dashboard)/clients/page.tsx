@@ -1,40 +1,56 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, Search, Trash2, Mail, Phone, MapPin, Calendar, Eye, Clock, ExternalLink } from "lucide-react"
-import { getClients, createClientRecord, deleteClientRecord } from "@/lib/supabase-client"
+import { Plus, Trash2, User, Mail, Phone, MapPin } from "lucide-react"
+import { getClients, deleteClientRecord, getJobs } from "@/lib/supabase-client"
+import { DataTable } from "@/components/ui/data-table"
+import { useSubscription } from "@/hooks/use-subscription"
+import { UpgradePrompt } from "@/components/ui/upgrade-prompt"
 import type { Client } from "@/types/database"
-import Link from "next/link"
 
 export default function ClientsPage() {
   const { toast } = useToast()
+  const { canCreateResource, getUpgradeMessage, isPro } = useSubscription()
   const [clients, setClients] = useState<Client[]>([])
+  const [clientStats, setClientStats] = useState<Record<string, { totalJobs: number; completedJobs: number; upcomingJobs: number }>>({})
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    address: ""
-  })
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
 
-  useEffect(() => {
-    fetchClients()
-  }, [])
-
-  const fetchClients = async () => {
+  const fetchClients = useCallback(async () => {
     try {
       setLoading(true)
-      const data = await getClients()
-      setClients(data || [])
+      const [clientsData, jobsData] = await Promise.all([
+        getClients(),
+        getJobs()
+      ])
+      
+      setClients(clientsData || [])
+      
+      // Calculate client statistics
+      if (jobsData) {
+        const stats: Record<string, { totalJobs: number; completedJobs: number; upcomingJobs: number }> = {}
+        
+        jobsData.forEach(job => {
+          if (job.client_id) {
+            if (!stats[job.client_id]) {
+              stats[job.client_id] = { totalJobs: 0, completedJobs: 0, upcomingJobs: 0 }
+            }
+            
+            stats[job.client_id].totalJobs++
+            
+            if (job.status === 'completed') {
+              stats[job.client_id].completedJobs++
+            } else if (['scheduled', 'in_progress'].includes(job.status)) {
+              stats[job.client_id].upcomingJobs++
+            }
+          }
+        })
+        
+        setClientStats(stats)
+      }
     } catch (error) {
       console.error('Error fetching clients:', error)
       toast({
@@ -45,30 +61,11 @@ export default function ClientsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    try {
-      await createClientRecord(formData)
-      toast({
-        title: "Success",
-        description: "Client created successfully"
-      })
-      
-      setIsCreateDialogOpen(false)
-      resetForm()
-      fetchClients()
-    } catch (error) {
-      console.error('Error saving client:', error)
-      toast({
-        title: "Error",
-        description: "Failed to save client",
-        variant: "destructive"
-      })
-    }
-  }
+  useEffect(() => {
+    fetchClients()
+  }, [fetchClients])
 
   const handleDelete = async (clientId: string) => {
     if (!confirm("Are you sure you want to delete this client?")) return
@@ -90,254 +87,191 @@ export default function ClientsPage() {
     }
   }
 
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      email: "",
-      phone: "",
-      address: ""
-    })
+  const getClientStatus = (client: Client) => {
+    const stats = clientStats[client.id]
+    if (!stats) return 'New'
+    if (stats.completedJobs > 0) return 'Active'
+    if (stats.upcomingJobs > 0) return 'Prospect'
+    return 'Inactive'
   }
 
-  // Quick Actions
-  const handleScheduleJob = (client: Client) => {
-    // Navigate to jobs page with client pre-selected
-    const url = `/jobs?client=${client.id}&clientName=${encodeURIComponent(client.name)}`
-    window.open(url, '_blank')
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Active': return 'bg-green-100 text-green-800'
+      case 'Prospect': return 'bg-yellow-100 text-yellow-800'
+      case 'Inactive': return 'bg-gray-100 text-gray-800'
+      default: return 'bg-blue-100 text-blue-800'
+    }
   }
 
-  const handleSendEmail = (client: Client) => {
-    const subject = encodeURIComponent(`Hello ${client.name}`)
-    const body = encodeURIComponent(`Hi ${client.name},\n\nI hope this email finds you well.\n\nBest regards,\nYour Cleaning Service Team`)
-    const mailtoUrl = `mailto:${client.email}?subject=${subject}&body=${body}`
-    window.open(mailtoUrl)
+  const getClientIcon = (client: Client) => {
+    const colors = ['bg-purple-500', 'bg-blue-500', 'bg-green-500', 'bg-orange-500', 'bg-pink-500', 'bg-indigo-500']
+    const color = colors[client.name.length % colors.length]
+    return (
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${color} text-white text-sm font-medium`}>
+        {client.name.charAt(0).toUpperCase()}
+      </div>
+    )
   }
 
-  const handleCallClient = (client: Client) => {
-    const phoneUrl = `tel:${client.phone}`
-    window.open(phoneUrl)
+  const formatLastInteraction = (client: Client) => {
+    // Mock data - in real app this would come from actual interaction data
+    const interactions = ['About 2 hours ago', '2 days ago', '1 week ago', '1 month ago']
+    return interactions[client.name.length % interactions.length]
   }
 
-  const handleViewJobs = (client: Client) => {
-    const url = `/jobs?client=${client.id}&clientName=${encodeURIComponent(client.name)}`
-    window.open(url, '_blank')
-  }
-
-
-
-  const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.phone.toLowerCase().includes(searchTerm.toLowerCase())
-  )
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="mt-2 text-slate-600">Loading clients...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Loading clients...</p>
         </div>
       </div>
     )
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Clients</h1>
-          <p className="text-slate-600">Manage your client relationships</p>
-        </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Client
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Client</DialogTitle>
-              <DialogDescription>
-                Enter the client's information to add them to your system.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Enter full name"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="email">Email Address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="Enter email address"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="Enter phone number"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="address">Address</Label>
-                <Textarea
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  placeholder="Full address"
-                  required
-                />
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  Create Client
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+  const tableData = clients.map((client) => ({
+    id: client.id,
+    name: client.name,
+    email: client.email,
+    phone: client.phone,
+    address: client.address,
+    status: getClientStatus(client),
+    lastInteraction: formatLastInteraction(client),
+    totalJobs: clientStats[client.id]?.totalJobs || 0,
+    completedJobs: clientStats[client.id]?.completedJobs || 0,
+    upcomingJobs: clientStats[client.id]?.upcomingJobs || 0,
+    jobStats: `${clientStats[client.id]?.completedJobs || 0}/${clientStats[client.id]?.totalJobs || 0}`,
+    clientIcon: getClientIcon(client)
+  }))
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-        <Input
-          placeholder="Search clients by name, email, or phone..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
-      </div>
-
-      {/* Clients Grid */}
-      {filteredClients.length === 0 ? (
-        <Card className="shadow-lg border-slate-200">
-          <CardContent className="text-center py-12">
-            <div className="mx-auto w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-              <Calendar className="h-6 w-6 text-slate-400" />
-            </div>
-            <h3 className="text-lg font-medium text-slate-900 mb-2">
-              {searchTerm ? 'No clients found' : 'No clients yet'}
-            </h3>
-            <p className="text-slate-600 mb-4">
-              {searchTerm 
-                ? 'Try adjusting your search terms'
-                : 'Get started by adding your first client'
-              }
+  const columns = [
+    {
+      key: 'name',
+      label: 'Client',
+      sortable: true,
+      width: '300px',
+      render: (value: string, row: any) => (
+        <div className="flex items-center space-x-2 min-w-0">
+          <div className="flex-shrink-0">
+            {row.clientIcon}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium truncate text-sm">{value}</p>
+            <p className="text-xs text-muted-foreground truncate flex items-center">
+              <Mail className="w-3 h-3 mr-1" />
+              {row.email || 'No email'}
             </p>
-            {!searchTerm && (
-              <Button onClick={() => setIsCreateDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add First Client
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredClients.map((client) => (
-            <Card key={client.id} className="crm-card">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg text-slate-900">{client.name}</CardTitle>
-                  <div className="flex space-x-1">
-                    <Link href={`/clients/${client.id}`}>
-                      <Button variant="ghost" size="sm">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </Link>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(client.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center text-sm text-gray-600">
-                  <Mail className="h-4 w-4 mr-2" />
-                  {client.email}
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <Phone className="h-4 w-4 mr-2" />
-                  {client.phone}
-                </div>
-                <div className="flex items-start text-sm text-gray-600">
-                  <MapPin className="h-4 w-4 mr-2 mt-0.5" />
-                  <span className="line-clamp-2">{client.address}</span>
-                </div>
-                
-                {/* Quick Actions */}
-                <div className="pt-3 border-t border-gray-100">
-                  <p className="text-xs font-medium text-gray-500 mb-2">Quick Actions</p>
-                  <div className="grid grid-cols-2 gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleScheduleJob(client)}
-                      className="h-8 text-xs justify-start text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                    >
-                      <Clock className="h-3 w-3 mr-1" />
-                      Schedule Job
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleSendEmail(client)}
-                      className="h-8 text-xs justify-start text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                    >
-                      <Mail className="h-3 w-3 mr-1" />
-                      Send Email
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleCallClient(client)}
-                      className="h-8 text-xs justify-start text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                    >
-                      <Phone className="h-3 w-3 mr-1" />
-                      Call Client
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleViewJobs(client)}
-                      className="h-8 text-xs justify-start text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                    >
-                      <ExternalLink className="h-3 w-3 mr-1" />
-                      View Jobs
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          </div>
         </div>
-      )}
-    </div>
+      )
+    },
+    {
+      key: 'phone',
+      label: 'Contact',
+      sortable: true,
+      width: '160px',
+      render: (value: string, row: any) => (
+        <div className="min-w-0">
+          <p className="text-sm font-medium flex items-center">
+            <Phone className="w-3 h-3 mr-1 text-muted-foreground" />
+            {value || 'No phone'}
+          </p>
+          <p className="text-xs text-muted-foreground truncate flex items-center">
+            <MapPin className="w-3 h-3 mr-1" />
+            {row.address?.split(',')[0] || 'No address'}
+          </p>
+        </div>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      sortable: true,
+      width: '120px',
+      render: (value: string) => (
+        <Badge className={getStatusColor(value)} variant="outline">
+          {value}
+        </Badge>
+      )
+    },
+    {
+      key: 'jobStats',
+      label: 'Jobs',
+      sortable: true,
+      width: '100px',
+      render: (value: string, row: any) => (
+        <div className="text-sm">
+          <div className="font-medium text-green-600">{value}</div>
+          <div className="text-muted-foreground text-xs">Completed/Total</div>
+        </div>
+      )
+    },
+    {
+      key: 'upcomingJobs',
+      label: 'Upcoming',
+      sortable: true,
+      width: '100px',
+      render: (value: number) => (
+        <div className="text-sm">
+          <div className="font-medium">{value}</div>
+          <div className="text-muted-foreground text-xs">Jobs</div>
+        </div>
+      )
+    },
+    {
+      key: 'lastInteraction',
+      label: 'Last Contact',
+      sortable: true,
+      width: '120px',
+      render: (value: string) => (
+        <div className="text-sm text-muted-foreground">
+          {value}
+        </div>
+      )
+    }
+  ]
+
+
+  return (
+    <>
+      <DataTable
+        title="Clients"
+        description="Manage your client relationships"
+        columns={columns}
+        data={tableData}
+        addButton={{
+          href: canCreateResource('maxClients', clients.length) ? "/clients/new" : undefined,
+          label: "Add Client",
+          icon: Plus,
+          onClick: canCreateResource('maxClients', clients.length) ? undefined : () => {
+            setShowUpgradePrompt(true)
+          }
+        }}
+        onRowClick={(row) => `/clients/${row.id}`}
+        onDelete={handleDelete}
+        searchPlaceholder="Search clients by name, email, or company..."
+        filterOptions={[
+          { key: 'status', label: 'Status', options: [
+            { value: 'Active', label: 'Active' },
+            { value: 'Prospect', label: 'Prospect' },
+            { value: 'Inactive', label: 'Inactive' },
+            { value: 'New', label: 'New' }
+          ]}
+        ]}
+      />
+      
+      <UpgradePrompt
+        title="Upgrade to Pro"
+        description={getUpgradeMessage('clients')}
+        resourceType="clients"
+        currentCount={clients.length}
+        maxCount={5}
+        isOpen={showUpgradePrompt}
+        onClose={() => setShowUpgradePrompt(false)}
+      />
+    </>
   )
 } 
