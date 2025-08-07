@@ -31,6 +31,7 @@ import {
 import { formatDate } from "@/lib/utils"
 import { getClient, getJobs } from "@/lib/supabase-client"
 import type { Client, Job } from "@/types/database"
+import { GoogleMaps } from "@/components/ui/google-maps"
 
 interface ClientNote {
   id: string
@@ -728,6 +729,15 @@ export default function ClientDetailsPage() {
             </CardContent>
           </Card>
 
+          {/* Client Location Map */}
+          {client.address && (
+            <GoogleMaps
+              address={client.address}
+              title={`${client.name}'s Location`}
+              height="300px"
+              showDirections={true}
+            />
+          )}
 
         </div>
       </div>

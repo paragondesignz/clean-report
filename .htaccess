@@ -1,0 +1,16 @@
+# 301 Redirect from paragondesign.co.nz to Vercel deployment
+RewriteEngine On
+
+# Redirect from https://www.paragondesign.co.nz/clean-report/ to Vercel
+RewriteCond %{HTTP_HOST} ^(www\.)?paragondesign\.co\.nz$ [NC]
+RewriteCond %{REQUEST_URI} ^/clean-report/?$ [NC]
+RewriteRule ^(.*)$ https://clean-report-gfvcb77ai-mark-paragondesigs-projects.vercel.app/$1 [R=301,L]
+
+# Alternative: If you want to redirect all requests under /clean-report/ path
+# RewriteCond %{HTTP_HOST} ^(www\.)?paragondesign\.co\.nz$ [NC]
+# RewriteCond %{REQUEST_URI} ^/clean-report/(.*)$ [NC]
+# RewriteRule ^clean-report/(.*)$ https://clean-report-gfvcb77ai-mark-paragondesigs-projects.vercel.app/$1 [R=301,L]
+
+# Ensure HTTPS is used
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]

@@ -29,6 +29,7 @@ import {
 } from "lucide-react"
 import { getPhotoUrl } from "@/lib/supabase-client"
 import { formatTime, formatDate } from "@/lib/utils"
+import { GoogleMaps } from "@/components/ui/google-maps"
 import type { Job, Task, Note, Photo, Client } from "@/types/database"
 
 interface JobWithDetails extends Job {
@@ -366,6 +367,16 @@ export default function MobileJobPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Job Location Map */}
+        {job.client?.address && (
+          <GoogleMaps
+            address={job.client.address}
+            title={`${job.client.name}'s Location`}
+            height="250px"
+            showDirections={true}
+          />
+        )}
 
         {/* Tasks */}
         <Card className="crm-card">

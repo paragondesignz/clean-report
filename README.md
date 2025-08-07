@@ -67,6 +67,9 @@ A modern SaaS web application for cleaning companies to manage client jobs, trac
 
    # App Configuration
    NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+   # Google Maps Integration (Optional)
+   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
    ```
 
 4. **Set up Supabase Database**
@@ -297,12 +300,33 @@ A modern SaaS web application for cleaning companies to manage client jobs, trac
    -- Repeat similar policies for other tables...
    ```
 
-5. **Run the development server**
+5. **Set up Google Maps Integration (Optional)**
+   
+   To enable map functionality in job details and location display:
+   
+   a. **Get a Google Maps API Key**
+   - Visit [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project or select an existing one
+   - Enable the following APIs:
+     - Maps JavaScript API
+     - Geocoding API
+     - Directions API
+   - Create credentials > API Key
+   - Restrict the key to your domain for security
+   
+   b. **Add to Environment Variables**
+   ```env
+   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_actual_api_key_here
+   ```
+   
+   **Note**: Without this API key, maps will show an error message instead of loading.
+
+6. **Run the development server**
    ```bash
    npm run dev
    ```
 
-6. **Open your browser**
+7. **Open your browser**
    Navigate to [http://localhost:3000](http://localhost:3000)
 
 ## Project Structure
@@ -404,6 +428,31 @@ clean-report/
 - `POST /api/feedback/[token]` - Submit feedback
 - `GET /api/supplies` - List supplies
 - `POST /api/supplies/usage` - Log supply usage
+
+## Troubleshooting
+
+### Common Issues
+
+#### Google Maps Not Loading
+If you see a spinner or error message instead of maps:
+
+1. **Check API Key**: Ensure `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is set in your `.env.local` file
+2. **Verify API Key**: Make sure the API key is valid and not restricted incorrectly
+3. **Enable APIs**: Ensure the following APIs are enabled in Google Cloud Console:
+   - Maps JavaScript API
+   - Geocoding API
+   - Directions API
+4. **Domain Restrictions**: If you've restricted the API key, make sure your domain is included
+
+#### Database Connection Issues
+- Verify your Supabase URL and API keys are correct
+- Check that all required tables are created
+- Ensure Row Level Security policies are properly configured
+
+#### Email Not Sending
+- Verify your Resend API key is correct
+- Check that the email domain is verified in Resend
+- Ensure the `NEXT_PUBLIC_APP_URL` is set correctly
 
 ## Deployment
 

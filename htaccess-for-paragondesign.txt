@@ -1,0 +1,28 @@
+# 301 Redirect from paragondesign.co.nz to Vercel deployment
+RewriteEngine On
+
+# Option 1: Redirect exact path /clean-report/ to Vercel
+RewriteCond %{HTTP_HOST} ^(www\.)?paragondesign\.co\.nz$ [NC]
+RewriteCond %{REQUEST_URI} ^/clean-report/?$ [NC]
+RewriteRule ^(.*)$ https://clean-report-gfvcb77ai-mark-paragondesigs-projects.vercel.app/ [R=301,L]
+
+# Option 2: Redirect all requests under /clean-report/ path to Vercel
+RewriteCond %{HTTP_HOST} ^(www\.)?paragondesign\.co\.nz$ [NC]
+RewriteCond %{REQUEST_URI} ^/clean-report/(.*)$ [NC]
+RewriteRule ^clean-report/(.*)$ https://clean-report-gfvcb77ai-mark-paragondesigs-projects.vercel.app/$1 [R=301,L]
+
+# Option 3: Redirect /clean-report (without trailing slash) to Vercel
+RewriteCond %{HTTP_HOST} ^(www\.)?paragondesign\.co\.nz$ [NC]
+RewriteCond %{REQUEST_URI} ^/clean-report$ [NC]
+RewriteRule ^clean-report$ https://clean-report-gfvcb77ai-mark-paragondesigs-projects.vercel.app/ [R=301,L]
+
+# Ensure HTTPS is used
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Additional security headers
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options nosniff
+    Header always set X-Frame-Options DENY
+    Header always set X-XSS-Protection "1; mode=block"
+</IfModule>

@@ -21,7 +21,11 @@ import {
   Send,
   Copy,
   Building2,
-  DollarSign
+  DollarSign,
+  Settings,
+  Trash2,
+  Image,
+  CheckCircle
 } from "lucide-react"
 import { formatDate, formatTime, formatListDate } from "@/lib/utils"
 import { 
@@ -34,6 +38,10 @@ import {
 } from "@/lib/supabase-client"
 import { downloadBrandedPDF } from "@/lib/pdf-generator"
 import { DataTable } from "@/components/ui/data-table"
+import { PhotoSelector } from "@/components/reports/photo-selector"
+import { TaskSelector } from "@/components/reports/task-selector"
+import { ReportConfiguration } from "@/components/reports/report-configuration"
+import { ReportService } from "@/lib/report-service"
 import type { Report, Job, Client, ReportWithJob, UserProfile } from "@/types/database"
 
 export default function ReportsPage() {
@@ -47,6 +55,9 @@ export default function ReportsPage() {
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false)
   const [selectedJob, setSelectedJob] = useState<string>("")
   const [customMessage, setCustomMessage] = useState("")
+  const [showReportBuilder, setShowReportBuilder] = useState(false)
+  const [showConfiguration, setShowConfiguration] = useState(false)
+  const [currentStep, setCurrentStep] = useState<'select' | 'photos' | 'tasks' | 'generate'>('select')
 
   const fetchData = useCallback(async () => {
     try {
@@ -108,21 +119,24 @@ export default function ReportsPage() {
     }
 
     try {
-      // Generate a unique report ID
-      const reportId = generateReportId()
-      const reportUrl = `${window.location.origin}/reports/${reportId}`
+      setLoading(true)
       
-      await createReport(selectedJob, reportUrl)
+      // Use the enhanced report service
+      const reportService = new ReportService(user!.id)
+      const { reportUrl, reportId } = await reportService.generateReport(selectedJob)
       
       toast({
         title: "Success",
-        description: "Report generated successfully"
+        description: "Report generated successfully!",
       })
       
       setIsGenerateDialogOpen(false)
       setSelectedJob("")
       setCustomMessage("")
-      fetchData()
+      fetchData() // Refresh the reports list
+      
+      // Open the report in a new tab
+      window.open(reportUrl, '_blank')
     } catch (error) {
       console.error('Error generating report:', error)
       toast({
@@ -130,6 +144,52 @@ export default function ReportsPage() {
         description: "Failed to generate report",
         variant: "destructive"
       })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAdvancedReportBuilder = () => {
+    setShowReportBuilder(true)
+    setCurrentStep('select')
+  }
+
+  const handleNextStep = () => {
+    switch (currentStep) {
+      case 'select':
+        if (selectedJob) {
+          setCurrentStep('photos')
+        } else {
+          toast({
+            title: "Error",
+            description: "Please select a job first",
+            variant: "destructive"
+          })
+        }
+        break
+      case 'photos':
+        setCurrentStep('tasks')
+        break
+      case 'tasks':
+        setCurrentStep('generate')
+        break
+      case 'generate':
+        handleGenerateReport()
+        break
+    }
+  }
+
+  const handlePreviousStep = () => {
+    switch (currentStep) {
+      case 'photos':
+        setCurrentStep('select')
+        break
+      case 'tasks':
+        setCurrentStep('photos')
+        break
+      case 'generate':
+        setCurrentStep('tasks')
+        break
     }
   }
 
@@ -426,6 +486,20 @@ export default function ReportsPage() {
           icon: Plus,
           onClick: () => setIsGenerateDialogOpen(true)
         }}
+        additionalButtons={[
+          {
+            label: "Advanced Builder",
+            icon: Settings,
+            onClick: handleAdvancedReportBuilder,
+            variant: "outline"
+          },
+          {
+            label: "Configuration",
+            icon: Settings,
+            onClick: () => setShowConfiguration(true),
+            variant: "outline"
+          }
+        ]}
         onRowClick={(row) => row.reportUrl}
         searchPlaceholder="Search reports by job title or client name..."
         filterOptions={[
@@ -507,6 +581,173 @@ export default function ReportsPage() {
             </Button>
             <Button onClick={handleGenerateReport}>
               Generate Report
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Advanced Report Builder Dialog */}
+      <Dialog open={showReportBuilder} onOpenChange={setShowReportBuilder}>
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Advanced Report Builder</DialogTitle>
+            <DialogDescription>
+              Customize your report with photo selection and task filtering
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Step Indicator */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                  currentStep === 'select' ? 'bg-primary text-white' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  1
+                </div>
+                <span className={`text-sm ${currentStep === 'select' ? 'text-primary font-medium' : 'text-gray-500'}`}>
+                  Select Job
+                </span>
+                <div className="w-8 h-1 bg-gray-200"></div>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                  currentStep === 'photos' ? 'bg-primary text-white' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  2
+                </div>
+                <span className={`text-sm ${currentStep === 'photos' ? 'text-primary font-medium' : 'text-gray-500'}`}>
+                  Photos
+                </span>
+                <div className="w-8 h-1 bg-gray-200"></div>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                  currentStep === 'tasks' ? 'bg-primary text-white' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  3
+                </div>
+                <span className={`text-sm ${currentStep === 'tasks' ? 'text-primary font-medium' : 'text-gray-500'}`}>
+                  Tasks
+                </span>
+                <div className="w-8 h-1 bg-gray-200"></div>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                  currentStep === 'generate' ? 'bg-primary text-white' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  4
+                </div>
+                <span className={`text-sm ${currentStep === 'generate' ? 'text-primary font-medium' : 'text-gray-500'}`}>
+                  Generate
+                </span>
+              </div>
+            </div>
+
+            {/* Step Content */}
+            {currentStep === 'select' && (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="job-select">Select Job</Label>
+                  <Select value={selectedJob} onValueChange={setSelectedJob}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a completed job" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getCompletedJobs().map((job) => {
+                        const client = clients.find(c => c.id === job.client_id)
+                        return (
+                          <SelectItem key={job.id} value={job.id}>
+                            {job.title} - {client?.name} ({formatDate(job.scheduled_date)})
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 'photos' && selectedJob && (
+              <PhotoSelector jobId={selectedJob} />
+            )}
+
+            {currentStep === 'tasks' && selectedJob && (
+              <TaskSelector jobId={selectedJob} />
+            )}
+
+            {currentStep === 'generate' && selectedJob && (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Ready to Generate Report</CardTitle>
+                    <CardDescription>
+                      Review your selections and generate the final report
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Selected Job:</span>
+                        <span className="font-medium">
+                          {jobs.find(j => j.id === selectedJob)?.title}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Photos Included:</span>
+                        <span className="font-medium">Custom selection</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Tasks Included:</span>
+                        <span className="font-medium">Custom selection</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => setShowReportBuilder(false)}
+            >
+              Cancel
+            </Button>
+            {currentStep !== 'select' && (
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={handlePreviousStep}
+              >
+                Previous
+              </Button>
+            )}
+            <Button 
+              onClick={handleNextStep}
+              disabled={currentStep === 'select' && !selectedJob}
+            >
+              {currentStep === 'generate' ? 'Generate Report' : 'Next'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Report Configuration Dialog */}
+      <Dialog open={showConfiguration} onOpenChange={setShowConfiguration}>
+        <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Report Configuration</DialogTitle>
+            <DialogDescription>
+              Customize your report appearance and content settings
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ReportConfiguration />
+          
+          <DialogFooter>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => setShowConfiguration(false)}
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

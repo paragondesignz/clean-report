@@ -1,4 +1,5 @@
 import * as React from "react"
+import Link from "next/link"
 import { Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -6,6 +7,7 @@ interface LogoProps extends React.HTMLAttributes<HTMLDivElement> {
   size?: "sm" | "md" | "lg"
   showText?: boolean
   textClassName?: string
+  href?: string
 }
 
 const sizeMap = {
@@ -31,11 +33,12 @@ export function Logo({
   showText = true, 
   className,
   textClassName,
+  href,
   ...props 
 }: LogoProps) {
   const sizes = sizeMap[size]
   
-  return (
+  const logoContent = (
     <div 
       className={cn("flex items-center space-x-2", className)} 
       {...props}
@@ -57,4 +60,14 @@ export function Logo({
       )}
     </div>
   )
+
+  if (href) {
+    return (
+      <Link href={href} className="hover:opacity-80 transition-opacity">
+        {logoContent}
+      </Link>
+    )
+  }
+
+  return logoContent
 }

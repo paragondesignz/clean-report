@@ -73,7 +73,7 @@ export default function LandingPage() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <Logo size="md" />
+                <Logo size="md" href="/" />
               </div>
             </div>
             
@@ -574,7 +574,7 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="mb-4">
-                <Logo size="md" textClassName="text-white" />
+                <Logo size="md" textClassName="text-white" href="/" />
               </div>
               <p className="text-gray-400 mb-4">
                 The complete solution for residential cleaning professionals.

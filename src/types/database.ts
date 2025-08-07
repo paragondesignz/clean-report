@@ -190,6 +190,185 @@ export interface Database {
           created_at?: string
         }
       }
+      report_photos: {
+        Row: {
+          id: string
+          report_id: string
+          photo_id: string
+          photo_type: string
+          display_order: number
+          include_in_report: boolean
+          caption: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          report_id: string
+          photo_id: string
+          photo_type?: string
+          display_order?: number
+          include_in_report?: boolean
+          caption?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          report_id?: string
+          photo_id?: string
+          photo_type?: string
+          display_order?: number
+          include_in_report?: boolean
+          caption?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      report_tasks: {
+        Row: {
+          id: string
+          report_id: string
+          task_id: string
+          task_title: string
+          task_description: string | null
+          is_completed: boolean
+          completed_at: string | null
+          display_order: number
+          include_in_report: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          report_id: string
+          task_id: string
+          task_title: string
+          task_description?: string | null
+          is_completed?: boolean
+          completed_at?: string | null
+          display_order?: number
+          include_in_report?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          report_id?: string
+          task_id?: string
+          task_title?: string
+          task_description?: string | null
+          is_completed?: boolean
+          completed_at?: string | null
+          display_order?: number
+          include_in_report?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      report_configurations: {
+        Row: {
+          id: string
+          user_id: string
+          company_name: string
+          company_logo_url: string | null
+          primary_color: string
+          secondary_color: string
+          accent_color: string
+          font_family: string
+          include_company_logo: boolean
+          include_company_colors: boolean
+          include_photos: boolean
+          include_tasks: boolean
+          include_notes: boolean
+          include_timer_data: boolean
+          photo_layout: string
+          max_photos_per_report: number
+          report_template: string
+          custom_header_text: string | null
+          custom_footer_text: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          company_name: string
+          company_logo_url?: string | null
+          primary_color?: string
+          secondary_color?: string
+          accent_color?: string
+          font_family?: string
+          include_company_logo?: boolean
+          include_company_colors?: boolean
+          include_photos?: boolean
+          include_tasks?: boolean
+          include_notes?: boolean
+          include_timer_data?: boolean
+          photo_layout?: string
+          max_photos_per_report?: number
+          report_template?: string
+          custom_header_text?: string | null
+          custom_footer_text?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          company_name?: string
+          company_logo_url?: string | null
+          primary_color?: string
+          secondary_color?: string
+          accent_color?: string
+          font_family?: string
+          include_company_logo?: boolean
+          include_company_colors?: boolean
+          include_photos?: boolean
+          include_tasks?: boolean
+          include_notes?: boolean
+          include_timer_data?: boolean
+          photo_layout?: string
+          max_photos_per_report?: number
+          report_template?: string
+          custom_header_text?: string | null
+          custom_footer_text?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      report_templates: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          template_data: any
+          is_default: boolean
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          template_data: any
+          is_default?: boolean
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          template_data?: any
+          is_default?: boolean
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
       user_profiles: {
         Row: {
           id: string
@@ -1046,6 +1225,10 @@ export type Task = Database['public']['Tables']['tasks']['Row']
 export type Photo = Database['public']['Tables']['photos']['Row']
 export type Note = Database['public']['Tables']['notes']['Row']
 export type Report = Database['public']['Tables']['reports']['Row']
+export type ReportPhoto = Database['public']['Tables']['report_photos']['Row']
+export type ReportTask = Database['public']['Tables']['report_tasks']['Row']
+export type ReportConfiguration = Database['public']['Tables']['report_configurations']['Row']
+export type ReportTemplate = Database['public']['Tables']['report_templates']['Row']
 export type UserProfile = Database['public']['Tables']['user_profiles']['Row']
 
 // Add-on Features Types

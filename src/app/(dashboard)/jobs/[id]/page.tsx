@@ -63,6 +63,8 @@ import {
   getPhotoUrl
 } from "@/lib/supabase-client"
 import { JobTimer } from "@/components/job-timer"
+import { GoogleMaps } from "@/components/ui/google-maps"
+import { JobSubContractorAssignment } from "@/components/job-sub-contractor-assignment"
 import type { Job, Client, Task, Note, Photo } from "@/types/database"
 
 interface JobWithDetails extends Job {
@@ -1218,6 +1220,25 @@ export default function JobDetailsPage() {
               </Button>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {/* Sub-Contractor Assignment */}
+          <JobSubContractorAssignment jobId={job.id} />
+
+          {/* Job Location Map */}
+          {job.client?.address && (
+            <GoogleMaps
+              address={job.client.address}
+              title={`${job.client.name}'s Location`}
+              height="300px"
+              showDirections={true}
+            />
+          )}
+
+          {/* Job Timer */}
+          <JobTimer jobId={job.id} />
         </div>
       </div>
 

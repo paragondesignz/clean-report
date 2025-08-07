@@ -32,6 +32,7 @@ import {
   MessageSquare
 } from "lucide-react"
 import Link from "next/link"
+import { GoogleMaps } from "@/components/ui/google-maps"
 
 interface JobDetail {
   id: string
@@ -654,6 +655,16 @@ export default function SubContractorJobDetail({ params }: { params: { id: strin
               </div>
             </CardContent>
           </Card>
+
+          {/* Job Location Map */}
+          {job.client_address && (
+            <GoogleMaps
+              address={job.client_address}
+              title={`${job.client_name}'s Location`}
+              height="300px"
+              showDirections={true}
+            />
+          )}
         </div>
       </div>
 
