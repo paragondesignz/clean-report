@@ -309,12 +309,12 @@ export default function MobileJobPage() {
             </div>
           </div>
           <Badge 
-            className={`${getStatusColor(job.status)} ${
+            className={`${job?.status ? getStatusColor(job.status) : 'bg-gray-100 text-gray-800'} ${
               isCompleted ? 'bg-green-100 text-green-800 border-green-300' : ''
             }`} 
             variant="outline"
           >
-            {isCompleted ? '✓ COMPLETED' : job.status.replace('_', ' ').toUpperCase()}
+            {isCompleted ? '✓ COMPLETED' : (job?.status ? job.status.replace('_', ' ').toUpperCase() : 'UNKNOWN')}
           </Badge>
         </div>
         

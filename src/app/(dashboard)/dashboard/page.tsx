@@ -255,8 +255,8 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(job.status)}`}>
-                          {getStatusText(job.status)}
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${job?.status ? getStatusColor(job.status) : 'bg-gray-100 text-gray-800'}`}>
+                          {job?.status ? getStatusText(job.status) : 'Unknown'}
                         </span>
                       </div>
                     </div>

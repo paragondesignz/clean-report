@@ -358,12 +358,12 @@ function MobileJobsContent() {
                     </div>
                     <div className="flex flex-col items-end space-y-2">
                       <Badge 
-                        className={`${getStatusColor(job.status)} ${
+                        className={`${job?.status ? getStatusColor(job.status) : 'bg-gray-100 text-gray-800'} ${
                           isCompleted ? 'bg-green-100 text-green-800 border-green-300' : ''
                         }`} 
                         variant="outline"
                       >
-                        {isCompleted ? '✓ COMPLETED' : job.status.replace('_', ' ').toUpperCase()}
+                        {isCompleted ? '✓ COMPLETED' : (job?.status ? job.status.replace('_', ' ').toUpperCase() : 'UNKNOWN')}
                       </Badge>
                       {isJobToday && !isCompleted && (
                         <Badge className="bg-primary/10 text-primary border-primary/20" variant="outline">

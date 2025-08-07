@@ -368,8 +368,8 @@ export default function SubContractorJobDetail({ params }: { params: { id: strin
                 ← Back to Dashboard
               </Button>
             </Link>
-            <Badge className={getStatusColor(job.status)}>
-              {job.status.replace('_', ' ').toUpperCase()}
+            <Badge className={job?.status ? getStatusColor(job.status) : 'bg-gray-100 text-gray-800'}>
+              {job?.status ? job.status.replace('_', ' ').toUpperCase() : 'UNKNOWN'}
             </Badge>
           </div>
           <h1 className="text-3xl font-bold">{job.title}</h1>

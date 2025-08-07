@@ -254,8 +254,8 @@ export default function SubContractorDashboard() {
                     <div className="flex-1">
                       <div className="flex items-center space-x-2 mb-2">
                         <CardTitle className="text-lg">{job.title}</CardTitle>
-                        <Badge className={getStatusColor(job.status)}>
-                          {job.status.replace('_', ' ').toUpperCase()}
+                        <Badge className={job?.status ? getStatusColor(job.status) : 'bg-gray-100 text-gray-800'}>
+                          {job?.status ? job.status.replace('_', ' ').toUpperCase() : 'UNKNOWN'}
                         </Badge>
                       </div>
                       <CardDescription className="text-sm">
