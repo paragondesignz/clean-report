@@ -2,31 +2,44 @@ import { createClient } from '@supabase/supabase-js'
 import { createBrowserClient } from '@supabase/ssr'
 import type { Database } from '@/types/database'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-// Client-side Supabase client
-export const supabase = createBrowserClient<Database>(supabaseUrl, supabaseAnonKey)
+// Client-side Supabase client (with fallback for missing env vars)
+export const supabase = supabaseUrl && supabaseAnonKey 
+  ? createBrowserClient<Database>(supabaseUrl, supabaseAnonKey)
+  : null
 
 // Server-side Supabase client
 export const createServerClient = () => {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Missing Supabase environment variables')
+  }
   return createClient<Database>(supabaseUrl, supabaseAnonKey)
 }
 
 // Service role client for admin operations
 export const createServiceClient = () => {
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-  return createClient<Database>(supabaseUrl, serviceRoleKey)
+  if (!supabaseUrl || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Missing Supabase environment variables')
+  }
+  return createClient<Database>(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY)
 }
 
 // Auth helpers
 export const getCurrentUser = async () => {
+  if (!supabase) {
+    throw new Error('Supabase is not configured')
+  }
   const { data: { user }, error } = await supabase.auth.getUser()
   if (error) throw error
   return user
 }
 
 export const signOut = async () => {
+  if (!supabase) {
+    throw new Error('Supabase is not configured')
+  }
   const { error } = await supabase.auth.signOut()
   if (error) throw error
 }
