@@ -62,7 +62,6 @@ import {
   deletePhoto,
   getPhotoUrl
 } from "@/lib/supabase-client"
-import { JobTimer } from "@/components/job-timer"
 import { GoogleMaps } from "@/components/ui/google-maps"
 import { JobSubContractorAssignment } from "@/components/job-sub-contractor-assignment"
 import type { Job, Client, Task, Note, Photo } from "@/types/database"
@@ -1138,9 +1137,6 @@ export default function JobDetailsPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Job Timer */}
-          <JobTimer job={job} onJobUpdate={handleJobUpdate} />
-
           {/* Job Status */}
           <Card className="crm-card">
             <CardHeader>
@@ -1237,8 +1233,6 @@ export default function JobDetailsPage() {
             />
           )}
 
-          {/* Job Timer */}
-          <JobTimer jobId={job.id} />
         </div>
       </div>
 
