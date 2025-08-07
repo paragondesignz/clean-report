@@ -68,8 +68,8 @@ function generateReportHTML(reportData: ReportData): string {
                   <div class="tasks-grid">
                       ${tasks.map((task: any) => `
                           <div class="task-item">
-                              <h4>${task.name}</h4>
-                              <p class="task-status status-${task.status}">${task.status}</p>
+                              <h4>${task.name || task.description || 'Unnamed Task'}</h4>
+                              <p class="task-status status-${task.status || 'pending'}">${task.status || 'Pending'}</p>
                               ${task.description ? `<p>${task.description}</p>` : ''}
                               ${task.time_spent ? `<p class="time-spent">Time: ${task.time_spent} minutes</p>` : ''}
                           </div>

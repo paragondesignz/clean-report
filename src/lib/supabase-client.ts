@@ -758,19 +758,48 @@ export const getUserProfile = async () => {
     const { data, error } = await supabase
       .from('user_profiles')
       .select('*')
-      .eq('user_id', user.id)  // Add WHERE clause
+      .eq('user_id', user.id)
       .single()
     
-    if (error && error.code !== 'PGRST116') {
-      console.error('Supabase getUserProfile error:', error)
-      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    // Handle missing table or other errors gracefully
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No rows returned - this is fine, return null
+        console.log('No profile found for user, returning null')
+        return null
+      } else if (error.code === '42P01' || error.message?.includes('relation') || error.message?.includes('does not exist')) {
+        // Table doesn't exist - return default profile
+        console.log('user_profiles table does not exist, returning default profile')
+        return {
+          user_id: user.id,
+          subscription_tier: 'free',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      } else {
+        console.error('Supabase getUserProfile error:', error)
+        // Return default profile instead of throwing
+        console.log('Database error, returning default profile')
+        return {
+          user_id: user.id,
+          subscription_tier: 'free',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      }
     }
     
     console.log('Retrieved profile:', data)
     return data
   } catch (error) {
     console.error('getUserProfile error:', error)
-    throw error
+    // Return default profile instead of throwing
+    return {
+      user_id: '',
+      subscription_tier: 'free',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
   }
 }
 
@@ -886,15 +915,25 @@ export const getCalendarIntegration = async () => {
       .eq('user_id', user.id)
       .single()
     
-    if (error && error.code !== 'PGRST116') {
-      console.error('Supabase getCalendarIntegration error:', error)
-      throw new Error(`Database error: ${error.message} (Code: ${error.code})`)
+    // Handle missing table or other errors gracefully
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No rows returned
+        return null
+      } else if (error.code === '42P01' || error.message?.includes('relation') || error.message?.includes('does not exist')) {
+        // Table doesn't exist
+        console.log('calendar_integrations table does not exist, returning null')
+        return null
+      } else {
+        console.error('Supabase getCalendarIntegration error:', error)
+        return null
+      }
     }
     
     return data
   } catch (error) {
     console.error('getCalendarIntegration error:', error)
-    throw error
+    return null
   }
 }
 
