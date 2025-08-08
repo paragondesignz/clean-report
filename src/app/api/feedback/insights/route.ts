@@ -1,29 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { FeedbackInsightsService } from '@/lib/ai-feedback-insights'
-import { supabase } from '@/lib/supabase-client'
+import { createServiceClient } from '@/lib/supabase-client'
 
 export async function POST(request: NextRequest) {
   try {
-    let { userId } = await request.json()
+    const { userId } = await request.json()
 
-    if (!supabase) {
+    if (!userId) {
       return NextResponse.json(
-        { error: 'Database connection not available' },
-        { status: 500 }
+        { error: 'User ID is required' },
+        { status: 400 }
       )
     }
 
-    // If userId is 'current' or not provided, get it from the auth session
-    if (!userId || userId === 'current') {
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
-      if (authError || !user) {
-        return NextResponse.json(
-          { error: 'User authentication required' },
-          { status: 401 }
-        )
-      }
-      userId = user.id
-    }
+    // Use service role client for admin operations (API endpoint)
+    const supabase = createServiceClient()
 
     // Fetch all feedback data for the user's jobs
     const { data: feedbackData, error } = await supabase

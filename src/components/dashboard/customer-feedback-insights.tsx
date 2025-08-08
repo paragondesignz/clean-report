@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useAuth } from '@/components/auth/auth-provider'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -26,18 +27,24 @@ export function CustomerFeedbackInsights() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
+  const { user } = useAuth()
 
-  const loadInsights = async () => {
+  const loadInsights = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
+
+      if (!user) {
+        setError('User not authenticated')
+        return
+      }
 
       const response = await fetch('/api/feedback/insights', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ userId: 'current' }) // Will be replaced with actual user ID
+        body: JSON.stringify({ userId: user.id })
       })
 
       if (!response.ok) {
@@ -57,11 +64,13 @@ export function CustomerFeedbackInsights() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user, toast])
 
   useEffect(() => {
-    loadInsights()
-  }, [])
+    if (user) {
+      loadInsights()
+    }
+  }, [user, loadInsights])
 
   const getSentimentIcon = () => {
     if (!insights) return <MessageSquare className="h-5 w-5 text-gray-400" />
