@@ -217,7 +217,7 @@ export const getClient = async (clientId: string) => {
 }
 
 // Job operations
-export const getJobs = async () => {
+export const getJobs = async (limit?: number, offset?: number) => {
   try {
     // Check environment variables
     if (!supabaseUrl || !supabaseAnonKey) {
@@ -234,16 +234,26 @@ export const getJobs = async () => {
       throw new Error('User not authenticated')
     }
 
-    console.log('Fetching jobs for user:', user.id)
+    console.log('Fetching jobs for user:', user.id, 'limit:', limit, 'offset:', offset)
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('jobs')
       .select(`
         *,
         client:clients(name, email)
       `)
       .eq('user_id', user.id)
-      .order('scheduled_date', { ascending: true })
+      .order('scheduled_date', { ascending: false })
+
+    // Add pagination if provided
+    if (limit !== undefined) {
+      query = query.limit(limit)
+    }
+    if (offset !== undefined) {
+      query = query.range(offset, offset + (limit || 20) - 1)
+    }
+
+    const { data, error } = await query
     
     if (error) {
       console.error('Supabase getJobs error:', error)
@@ -254,6 +264,28 @@ export const getJobs = async () => {
     return data
   } catch (error) {
     console.error('getJobs error:', error)
+    throw error
+  }
+}
+
+export const getJobsCount = async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { count, error } = await supabase
+      .from('jobs')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+    
+    if (error) {
+      console.error('Supabase getJobsCount error:', error)
+      throw new Error(`Database error: ${error.message}`)
+    }
+    
+    return count || 0
+  } catch (error) {
+    console.error('getJobsCount error:', error)
     throw error
   }
 }
@@ -391,6 +423,125 @@ export const deleteJob = async (id: string) => {
     .eq('id', id)
   
   if (error) throw error
+}
+
+export const deleteRecurringJob = async (
+  jobId: string, 
+  deleteType: 'single' | 'all' | 'future'
+) => {
+  try {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      throw new Error(`Authentication error: ${userError.message}`)
+    }
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    // Get the job to check if it's recurring
+    const { data: job, error: jobError } = await supabase
+      .from('jobs')
+      .select('*, recurring_job_id')
+      .eq('id', jobId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (jobError) {
+      throw new Error(`Failed to fetch job: ${jobError.message}`)
+    }
+
+    if (!job) {
+      throw new Error('Job not found')
+    }
+
+    switch (deleteType) {
+      case 'single':
+        // Delete only this specific job instance
+        const { error: singleDeleteError } = await supabase
+          .from('jobs')
+          .delete()
+          .eq('id', jobId)
+          .eq('user_id', user.id)
+        
+        if (singleDeleteError) {
+          throw new Error(`Failed to delete job: ${singleDeleteError.message}`)
+        }
+        break
+
+      case 'future':
+        // Delete this job and all future instances with the same recurring_job_id
+        if (!job.recurring_job_id) {
+          // If no recurring_job_id, just delete this job
+          const { error: futureDeleteError } = await supabase
+            .from('jobs')
+            .delete()
+            .eq('id', jobId)
+            .eq('user_id', user.id)
+          
+          if (futureDeleteError) {
+            throw new Error(`Failed to delete job: ${futureDeleteError.message}`)
+          }
+        } else {
+          // Delete this job and all future jobs in the series
+          const { error: futureDeleteError } = await supabase
+            .from('jobs')
+            .delete()
+            .eq('recurring_job_id', job.recurring_job_id)
+            .gte('scheduled_date', job.scheduled_date)
+            .eq('user_id', user.id)
+          
+          if (futureDeleteError) {
+            throw new Error(`Failed to delete future jobs: ${futureDeleteError.message}`)
+          }
+        }
+        break
+
+      case 'all':
+        // Delete all instances of this recurring job series
+        if (!job.recurring_job_id) {
+          // If no recurring_job_id, just delete this job
+          const { error: allDeleteError } = await supabase
+            .from('jobs')
+            .delete()
+            .eq('id', jobId)
+            .eq('user_id', user.id)
+          
+          if (allDeleteError) {
+            throw new Error(`Failed to delete job: ${allDeleteError.message}`)
+          }
+        } else {
+          // Delete all jobs in the recurring series
+          const { error: allDeleteError } = await supabase
+            .from('jobs')
+            .delete()
+            .eq('recurring_job_id', job.recurring_job_id)
+            .eq('user_id', user.id)
+          
+          if (allDeleteError) {
+            throw new Error(`Failed to delete all recurring jobs: ${allDeleteError.message}`)
+          }
+
+          // Also delete the recurring job template
+          const { error: recurringDeleteError } = await supabase
+            .from('recurring_jobs')
+            .delete()
+            .eq('id', job.recurring_job_id)
+            .eq('user_id', user.id)
+          
+          if (recurringDeleteError) {
+            console.warn('Failed to delete recurring job template:', recurringDeleteError.message)
+          }
+        }
+        break
+
+      default:
+        throw new Error('Invalid delete type')
+    }
+  } catch (error) {
+    console.error('deleteRecurringJob error:', error)
+    throw error
+  }
 }
 
 export const getJob = async (jobId: string) => {
@@ -1148,14 +1299,6 @@ export const updateRecurringJob = async (id: string, jobData: Partial<{
   return data
 }
 
-export const deleteRecurringJob = async (id: string) => {
-  const { error } = await supabase
-    .from('recurring_jobs')
-    .delete()
-    .eq('id', id)
-  
-  if (error) throw error
-}
 
 // Generate job instances from a recurring job
 export const generateJobInstances = async (recurringJobId: string, untilDate?: string) => {
@@ -1177,13 +1320,18 @@ export const generateJobInstances = async (recurringJobId: string, untilDate?: s
     // Calculate the dates for job instances based on frequency
     const instances = []
     const startDate = new Date(recurringJob.start_date)
+    
+    // For recurring jobs without end date, generate 1 year ahead
+    // For those with end date, respect the end date
     const endDate = untilDate ? new Date(untilDate) : 
                     recurringJob.end_date ? new Date(recurringJob.end_date) :
-                    new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) // Default to 90 days
+                    new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // Default to 1 year
     
-    let currentDate = new Date(startDate)
+    const currentDate = new Date(startDate)
+    let instanceCount = 0
+    const maxInstances = 365 // Safety limit to prevent infinite loops
     
-    while (currentDate <= endDate) {
+    while (currentDate <= endDate && instanceCount < maxInstances) {
       // Check if instance already exists for this date
       const { data: existingJob } = await supabase
         .from('jobs')
@@ -1222,16 +1370,25 @@ export const generateJobInstances = async (recurringJobId: string, untilDate?: s
           currentDate.setMonth(currentDate.getMonth() + 1)
           break
       }
+      
+      instanceCount++
     }
     
-    // Insert all new instances
+    // Insert all new instances in batches to avoid database limits
     if (instances.length > 0) {
-      const { data, error: insertError } = await supabase
-        .from('jobs')
-        .insert(instances)
-        .select()
+      const batchSize = 100
+      const insertedData = []
       
-      if (insertError) throw insertError
+      for (let i = 0; i < instances.length; i += batchSize) {
+        const batch = instances.slice(i, i + batchSize)
+        const { data, error: insertError } = await supabase
+          .from('jobs')
+          .insert(batch)
+          .select()
+        
+        if (insertError) throw insertError
+        if (data) insertedData.push(...data)
+      }
       
       // Update last_generated_date
       await supabase
@@ -1239,12 +1396,223 @@ export const generateJobInstances = async (recurringJobId: string, untilDate?: s
         .update({ last_generated_date: new Date().toISOString() })
         .eq('id', recurringJobId)
       
-      return data
+      return insertedData
     }
     
     return []
   } catch (error) {
     console.error('Error generating job instances:', error)
+    throw error
+  }
+}
+
+// Generate future instances dynamically as needed (called from calendar view)
+export const ensureJobInstancesUpTo = async (recurringJobId: string, targetDate: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    // Get the recurring job details
+    const { data: recurringJob, error: fetchError } = await supabase
+      .from('recurring_jobs')
+      .select('*')
+      .eq('id', recurringJobId)
+      .eq('user_id', user.id)
+      .single()
+    
+    if (fetchError) throw fetchError
+    if (!recurringJob) throw new Error('Recurring job not found')
+
+    // Check if we have instances up to the target date
+    const { data: latestInstance } = await supabase
+      .from('jobs')
+      .select('scheduled_date')
+      .eq('recurring_job_id', recurringJobId)
+      .eq('user_id', user.id)
+      .order('scheduled_date', { ascending: false })
+      .limit(1)
+      .single()
+
+    const latestDate = latestInstance ? new Date(latestInstance.scheduled_date) : new Date(recurringJob.start_date)
+    const target = new Date(targetDate)
+
+    // If we need more instances, generate them
+    if (latestDate < target) {
+      return await generateJobInstances(recurringJobId, targetDate)
+    }
+
+    return []
+  } catch (error) {
+    console.error('Error ensuring job instances:', error)
+    return []
+  }
+}
+
+// Get recurring jobs for a specific client (just the template, not instances)
+export const getRecurringJobsForClient = async (clientId: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { data, error } = await supabase
+      .from('recurring_jobs')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    return data || []
+  } catch (error) {
+    console.error('Error fetching recurring jobs for client:', error)
+    throw error
+  }
+}
+
+// AI Task Suggestions Functions
+export const saveTaskSuggestion = async (suggestion: any) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { data, error } = await supabase
+      .from('task_suggestions')
+      .insert([{
+        user_id: user.id,
+        client_id: suggestion.clientId,
+        recurring_job_id: suggestion.recurringJobId,
+        type: suggestion.type,
+        title: suggestion.title,
+        description: suggestion.description,
+        suggested_task: suggestion.suggestedTask,
+        confidence: suggestion.confidence,
+        reasoning: suggestion.reasoning,
+        status: suggestion.status || 'pending'
+      }])
+      .select()
+
+    if (error) throw error
+    return data?.[0]
+  } catch (error) {
+    console.error('Error saving task suggestion:', error)
+    throw error
+  }
+}
+
+export const getTaskSuggestions = async (clientId?: string, status?: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    let query = supabase
+      .from('task_suggestions')
+      .select('*, client:clients(name), recurring_job:recurring_jobs(title)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (clientId) {
+      query = query.eq('client_id', clientId)
+    }
+
+    if (status) {
+      query = query.eq('status', status)
+    }
+
+    const { data, error } = await query
+
+    if (error) throw error
+    return data || []
+  } catch (error) {
+    console.error('Error fetching task suggestions:', error)
+    throw error
+  }
+}
+
+export const updateTaskSuggestionStatus = async (suggestionId: string, status: string, implementedTaskId?: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const updateData: any = {
+      status,
+      updated_at: new Date().toISOString()
+    }
+
+    if (implementedTaskId) {
+      updateData.implemented_task_id = implementedTaskId
+    }
+
+    const { data, error } = await supabase
+      .from('task_suggestions')
+      .update(updateData)
+      .eq('id', suggestionId)
+      .eq('user_id', user.id)
+      .select()
+
+    if (error) throw error
+    return data?.[0]
+  } catch (error) {
+    console.error('Error updating task suggestion status:', error)
+    throw error
+  }
+}
+
+export const getClientTaskCompletionHistory = async (clientId: string, days: number = 90) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - days)
+
+    const { data, error } = await supabase
+      .from('jobs')
+      .select(`
+        id,
+        scheduled_date,
+        status,
+        tasks(id, title, is_completed)
+      `)
+      .eq('client_id', clientId)
+      .eq('user_id', user.id)
+      .gte('scheduled_date', startDate.toISOString().split('T')[0])
+      .order('scheduled_date', { ascending: true })
+
+    if (error) throw error
+
+    // Process the data to get completion history
+    const history = data?.map((job: any) => {
+      const totalTasks = job.tasks?.length || 0
+      const completedTasks = job.tasks?.filter((task: any) => task.is_completed).length || 0
+      const skippedTasks = job.tasks?.filter((task: any) => !task.is_completed).map((task: any) => task.title) || []
+
+      return {
+        date: job.scheduled_date,
+        completed_tasks: completedTasks,
+        total_tasks: totalTasks,
+        skipped_tasks: skippedTasks,
+        job_status: job.status
+      }
+    }) || []
+
+    return history
+  } catch (error) {
+    console.error('Error fetching client task completion history:', error)
+    throw error
+  }
+}
+
+export const generateAITaskSuggestions = async (clientId: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    // This would call the AI suggestion engine
+    // For now, return a placeholder response
+    console.log('AI suggestion generation would happen here for client:', clientId)
+    return []
+  } catch (error) {
+    console.error('Error generating AI task suggestions:', error)
     throw error
   }
 }
@@ -1851,6 +2219,191 @@ export const getSupplies = async () => {
     return data
   } catch (error) {
     console.error('getSupplies error:', error)
+    throw error
+  }
+}
+
+// Recurring Task Propagation Functions
+export const addTaskToFutureInstances = async (
+  recurringJobId: string, 
+  taskTitle: string, 
+  taskDescription: string,
+  frequency: 'weekly' | 'bi_weekly' | 'monthly' | 'quarterly' | 'bi_annual' | 'annual' | 'custom',
+  customWeeks?: number
+) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    // Get all future job instances for this recurring job
+    const today = new Date().toISOString().split('T')[0]
+    const { data: futureJobs, error: jobsError } = await supabase
+      .from('jobs')
+      .select('id, scheduled_date')
+      .eq('recurring_job_id', recurringJobId)
+      .eq('user_id', user.id)
+      .gte('scheduled_date', today)
+      .order('scheduled_date', { ascending: true })
+
+    if (jobsError) throw jobsError
+    if (!futureJobs || futureJobs.length === 0) return { tasksAdded: 0 }
+
+    // Calculate which instances should get this task based on frequency
+    let jobsToAddTaskTo: string[] = []
+    
+    if (frequency === 'weekly' || frequency === 'bi_weekly' || frequency === 'monthly') {
+      // Add to all future instances (they already follow the base frequency)
+      jobsToAddTaskTo = futureJobs.map(job => job.id)
+    } else {
+      // For quarterly, bi-annual, annual, or custom - calculate specific instances
+      const frequencyInWeeks = getFrequencyInWeeks(frequency, customWeeks)
+      const startDate = new Date(futureJobs[0].scheduled_date)
+      
+      futureJobs.forEach((job, index) => {
+        const jobDate = new Date(job.scheduled_date)
+        const weeksSinceStart = Math.floor((jobDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000))
+        
+        // Add task if this job falls on the specified frequency
+        if (weeksSinceStart % frequencyInWeeks === 0) {
+          jobsToAddTaskTo.push(job.id)
+        }
+      })
+    }
+
+    // Create tasks for the selected job instances
+    const tasksToCreate = jobsToAddTaskTo.map(jobId => ({
+      user_id: user.id,
+      job_id: jobId,
+      title: taskTitle,
+      description: taskDescription,
+      is_completed: false,
+      created_from_recurring_pattern: true,
+      recurring_frequency: frequency
+    }))
+
+    if (tasksToCreate.length > 0) {
+      const { data, error: createError } = await supabase
+        .from('tasks')
+        .insert(tasksToCreate)
+        .select()
+
+      if (createError) throw createError
+      return { tasksAdded: data?.length || 0, taskIds: data?.map(task => task.id) }
+    }
+
+    return { tasksAdded: 0 }
+  } catch (error) {
+    console.error('Error adding task to future instances:', error)
+    throw error
+  }
+}
+
+// Helper function to convert frequency to weeks
+const getFrequencyInWeeks = (frequency: string, customWeeks?: number): number => {
+  switch (frequency) {
+    case 'weekly': return 1
+    case 'bi_weekly': return 2
+    case 'monthly': return 4
+    case 'quarterly': return 12
+    case 'bi_annual': return 26
+    case 'annual': return 52
+    case 'custom': return customWeeks || 4
+    default: return 4
+  }
+}
+
+// Recurring Job Note Management Functions
+export const addRecurringJobNote = async (
+  recurringJobId: string,
+  content: string,
+  category: 'general' | 'maintenance' | 'client_preference' | 'access_instructions' | 'special_requirements' = 'general'
+) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { data, error } = await supabase
+      .from('recurring_job_notes')
+      .insert([{
+        user_id: user.id,
+        recurring_job_id: recurringJobId,
+        content,
+        category,
+        created_at: new Date().toISOString()
+      }])
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error('Error adding recurring job note:', error)
+    throw error
+  }
+}
+
+export const getRecurringJobNotes = async (recurringJobId: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { data, error } = await supabase
+      .from('recurring_job_notes')
+      .select('*')
+      .eq('recurring_job_id', recurringJobId)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
+    return data || []
+  } catch (error) {
+    console.error('Error getting recurring job notes:', error)
+    throw error
+  }
+}
+
+export const updateRecurringJobNote = async (noteId: string, content: string, category?: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const updateData: any = { 
+      content,
+      updated_at: new Date().toISOString()
+    }
+    if (category) updateData.category = category
+
+    const { data, error } = await supabase
+      .from('recurring_job_notes')
+      .update(updateData)
+      .eq('id', noteId)
+      .eq('user_id', user.id)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error('Error updating recurring job note:', error)
+    throw error
+  }
+}
+
+export const deleteRecurringJobNote = async (noteId: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { error } = await supabase
+      .from('recurring_job_notes')
+      .delete()
+      .eq('id', noteId)
+      .eq('user_id', user.id)
+
+    if (error) throw error
+    return true
+  } catch (error) {
+    console.error('Error deleting recurring job note:', error)
     throw error
   }
 }

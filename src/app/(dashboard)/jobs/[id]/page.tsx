@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -50,6 +50,7 @@ import {
   getJob, 
   updateJob, 
   deleteJob,
+  deleteRecurringJob,
   getTasks,
   createTask,
   updateTask,
@@ -61,10 +62,14 @@ import {
   getPhotosForJob,
   uploadPhoto,
   deletePhoto,
-  getPhotoUrl
+  getPhotoUrl,
+  addTaskToFutureInstances
 } from "@/lib/supabase-client"
 import { GoogleMaps } from "@/components/ui/google-maps"
 import { JobSubContractorAssignment } from "@/components/job-sub-contractor-assignment"
+import { RecurringJobDeleteDialog } from "@/components/recurring-job-delete-dialog"
+import { RecurringTaskDialog } from "@/components/recurring-task-dialog"
+import { RecurringJobNotes } from "@/components/recurring-job-notes"
 import type { Job, Client, Task, Note, Photo } from "@/types/database"
 
 interface JobWithDetails extends Job {
@@ -93,6 +98,9 @@ export default function JobDetailsPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
+  const [isRecurringTaskDialogOpen, setIsRecurringTaskDialogOpen] = useState(false)
+  const [pendingTaskData, setPendingTaskData] = useState<{title: string, description: string} | null>(null)
+  const taskSectionRef = useRef<HTMLDivElement>(null)
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -283,14 +291,28 @@ export default function JobDetailsPage() {
   const handleAddTask = async () => {
     if (!job || !newTask.title.trim()) return
 
+    // If this is a recurring job instance, show the recurring task dialog
+    if (job.recurring_job_id) {
+      setPendingTaskData({ title: newTask.title, description: newTask.description })
+      setIsRecurringTaskDialogOpen(true)
+      return
+    }
+
+    // For non-recurring jobs, add task directly
+    await addTaskDirectly(newTask.title, newTask.description)
+  }
+
+  const addTaskDirectly = async (title: string, description: string) => {
+    if (!job) return
+
     try {
       // Calculate order_index for the new task (last position)
       const maxOrder = job.tasks?.length ? Math.max(...job.tasks.map(t => t.order_index || 0)) : 0
       
       await createTask({
         job_id: job.id,
-        title: newTask.title,
-        description: newTask.description,
+        title: title,
+        description: description,
         order_index: maxOrder + 1
       })
 
@@ -300,7 +322,19 @@ export default function JobDetailsPage() {
       })
 
       setNewTask({ title: "", description: "" })
-      fetchJobDetails(job.id)
+      
+      // Refresh job details and then scroll to tasks section
+      await fetchJobDetails(job.id)
+      
+      // Use a small delay to ensure the DOM has updated after the fetch
+      setTimeout(() => {
+        if (taskSectionRef.current) {
+          taskSectionRef.current.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' 
+          })
+        }
+      }, 100)
     } catch (error) {
       console.error('Error adding task:', error)
       toast({
@@ -308,6 +342,64 @@ export default function JobDetailsPage() {
         description: "Failed to add task",
         variant: "destructive"
       })
+    }
+  }
+
+  const handleAddToRecurring = async (frequency: string, customWeeks?: number) => {
+    if (!job || !pendingTaskData || !job.recurring_job_id) return
+
+    try {
+      // First add the task to the current job instance
+      await addTaskDirectly(pendingTaskData.title, pendingTaskData.description)
+
+      // Then add to future instances based on frequency
+      const result = await addTaskToFutureInstances(
+        job.recurring_job_id,
+        pendingTaskData.title,
+        pendingTaskData.description,
+        frequency as any,
+        customWeeks
+      )
+
+      toast({
+        title: "Task Added to Recurring Job",
+        description: `Added "${pendingTaskData.title}" to ${result.tasksAdded} future job instances.`,
+        duration: 4000
+      })
+    } catch (error) {
+      console.error('Error adding task to recurring job:', error)
+      toast({
+        title: "Error",
+        description: "Failed to add task to future instances",
+        variant: "destructive"
+      })
+    } finally {
+      setPendingTaskData(null)
+      setIsRecurringTaskDialogOpen(false)
+    }
+  }
+
+  const handleAddOnceOnly = async () => {
+    if (!pendingTaskData) return
+
+    try {
+      await addTaskDirectly(pendingTaskData.title, pendingTaskData.description)
+      
+      toast({
+        title: "Task Added",
+        description: "Task added to this job instance only",
+        duration: 3000
+      })
+    } catch (error) {
+      console.error('Error adding task:', error)
+      toast({
+        title: "Error",
+        description: "Failed to add task",
+        variant: "destructive"
+      })
+    } finally {
+      setPendingTaskData(null)
+      setIsRecurringTaskDialogOpen(false)
     }
   }
 
@@ -494,16 +586,27 @@ export default function JobDetailsPage() {
     }
   }
 
-  const handleDelete = async () => {
+  const handleDelete = async (deleteType: 'single' | 'all' | 'future') => {
     if (!job) return
     
     try {
-      // Delete job from Supabase
-      await deleteJob(job.id)
+      if (job.recurring_job_id) {
+        // Use recurring job deletion logic
+        await deleteRecurringJob(job.id, deleteType)
+      } else {
+        // Use simple job deletion for non-recurring jobs
+        await deleteJob(job.id)
+      }
+      
+      const messages = {
+        single: "Job instance deleted successfully",
+        future: "Job and future instances deleted successfully", 
+        all: "All recurring job instances deleted successfully"
+      }
       
       toast({
         title: "Success",
-        description: "Job deleted successfully"
+        description: job.recurring_job_id ? messages[deleteType] : "Job deleted successfully"
       })
       router.push("/jobs")
     } catch (error) {
@@ -656,30 +759,13 @@ export default function JobDetailsPage() {
                 <Edit className="h-4 w-4 mr-2" />
                 Edit Job
               </Button>
-              <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="destructive">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Delete Job</DialogTitle>
-                    <DialogDescription>
-                      Are you sure you want to delete this job? This action cannot be undone.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button variant="destructive" onClick={handleDelete}>
-                      Delete Job
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <Button 
+                variant="destructive" 
+                onClick={() => setIsDeleteDialogOpen(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
             </>
           )}
         </div>
@@ -900,7 +986,7 @@ export default function JobDetailsPage() {
           </Card>
 
           {/* Tasks */}
-          <Card className="crm-card">
+          <Card className="crm-card" ref={taskSectionRef}>
             <CardHeader>
               <CardTitle className="text-gray-900">Tasks</CardTitle>
               <CardDescription>
@@ -1002,6 +1088,14 @@ export default function JobDetailsPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Recurring Job Notes */}
+          {job?.recurring_job_id && (
+            <RecurringJobNotes 
+              recurringJobId={job.recurring_job_id} 
+              jobTitle={job.title}
+            />
+          )}
 
           {/* Notes */}
           <Card className="crm-card">
@@ -1426,6 +1520,27 @@ export default function JobDetailsPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Recurring Job Delete Dialog */}
+      <RecurringJobDeleteDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        onDelete={handleDelete}
+        jobTitle={job?.title || ''}
+        isRecurring={!!job?.recurring_job_id}
+      />
+
+      {/* Recurring Task Dialog */}
+      {pendingTaskData && job?.recurring_job_id && (
+        <RecurringTaskDialog
+          open={isRecurringTaskDialogOpen}
+          onOpenChange={setIsRecurringTaskDialogOpen}
+          taskTitle={pendingTaskData.title}
+          jobTitle={job.title}
+          onAddToRecurring={handleAddToRecurring}
+          onAddOnceOnly={handleAddOnceOnly}
+        />
       )}
     </div>
   )

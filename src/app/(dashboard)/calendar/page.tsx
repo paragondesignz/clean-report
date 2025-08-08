@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -15,7 +16,8 @@ import {
   User,
   RefreshCw,
   Settings,
-  ArrowRight
+  ArrowRight,
+  X
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -37,17 +39,20 @@ interface CalendarEvent {
   client?: Client
   type: 'job' | 'appointment'
   isRecurring?: boolean
+  recurringJobId?: string
 }
 
 export default function CalendarPage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [calendarIntegration, setCalendarIntegration] = useState<CalendarIntegration | null>(null)
   const [syncing, setSyncing] = useState(false)
+  const [highlightedRecurringJob, setHighlightedRecurringJob] = useState<string | null>(null)
 
   const loadCalendarData = useCallback(async () => {
     setLoading(true)
@@ -70,7 +75,8 @@ export default function CalendarPage() {
           status: job.status,
           type: "job" as const,
           client: job.client,
-          isRecurring: !!job.recurring_job_id
+          isRecurring: !!job.recurring_job_id,
+          recurringJobId: job.recurring_job_id
         }))
         setEvents(calendarEvents)
       }
@@ -99,6 +105,20 @@ export default function CalendarPage() {
   useEffect(() => {
     loadCalendarData()
   }, [currentDate, loadCalendarData])
+
+  // Handle recurring job highlighting from query params
+  useEffect(() => {
+    const recurringId = searchParams.get('recurring')
+    if (recurringId) {
+      setHighlightedRecurringJob(recurringId)
+      
+      // Show a toast to inform the user
+      toast({
+        title: "Recurring Job Highlighted",
+        description: "Jobs from the selected recurring series are highlighted in blue."
+      })
+    }
+  }, [searchParams, toast])
 
   const syncWithGoogleCalendar = async () => {
     setSyncing(true)
@@ -273,6 +293,37 @@ export default function CalendarPage() {
         </div>
       </div>
 
+      {/* Recurring Job Filter Status */}
+      {highlightedRecurringJob && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <RefreshCw className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-900">
+                  Viewing recurring job instances
+                </span>
+                <Badge variant="outline" className="text-blue-700 border-blue-300">
+                  Highlighted in blue
+                </Badge>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  setHighlightedRecurringJob(null)
+                  router.push('/calendar')
+                }}
+                className="text-blue-700 border-blue-300 hover:bg-blue-100"
+              >
+                <X className="h-4 w-4 mr-1" />
+                View All Jobs
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Calendar Integration Status */}
       {calendarIntegration && (
         <Card>
@@ -350,7 +401,13 @@ export default function CalendarPage() {
                       {getEventsForDate(day).map(event => (
                         <div
                           key={event.id}
-                          className={`text-xs p-1 rounded cursor-pointer hover:bg-blue-50 transition-colors ${event.isRecurring ? 'border-l-2 border-l-purple-400' : ''}`}
+                          className={`text-xs p-1 rounded cursor-pointer hover:bg-blue-50 transition-colors ${
+                            highlightedRecurringJob && event.recurringJobId === highlightedRecurringJob 
+                              ? 'bg-blue-100 border-l-4 border-l-blue-600 ring-1 ring-blue-200' 
+                              : event.isRecurring 
+                                ? 'border-l-2 border-l-purple-400' 
+                                : ''
+                          }`}
                           title={`${event.title} - ${formatTime(event.time)} ${event.isRecurring ? '(Recurring Job Instance)' : ''}`}
                           onClick={() => handleEventClick(event)}
                         >

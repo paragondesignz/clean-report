@@ -30,12 +30,21 @@ import {
   Copy,
   RefreshCw,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Briefcase,
+  CheckCircle,
+  DollarSign,
+  Calendar,
+  TrendingUp,
+  Target,
+  Activity,
+  Star
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
-import { getClient, getJobsForClient } from "@/lib/supabase-client"
+import { getClient, getJobsForClient, getRecurringJobsForClient, getClientTaskCompletionHistory } from "@/lib/supabase-client"
 import type { Client, Job } from "@/types/database"
 import { GoogleMaps } from "@/components/ui/google-maps"
+import { TaskSuggestions } from "@/components/ai/task-suggestions"
 
 interface ClientNote {
   id: string
@@ -50,6 +59,104 @@ interface ClientWithDetails extends Client {
   totalJobs?: number
   completedJobs?: number
   totalRevenue?: number
+  upcomingJobs?: number
+  totalRecurringJobs?: number
+  completionRate?: number
+  avgTaskCompletion?: number
+  lastJobDate?: string | null
+  daysSinceLastJob?: number | null
+}
+
+// Component to display recurring jobs for a client
+function ClientRecurringJobsList({ clientId }: { clientId: string }) {
+  const [recurringJobs, setRecurringJobs] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
+
+  const loadRecurringJobs = useCallback(async () => {
+    try {
+      setLoading(true)
+      const data = await getRecurringJobsForClient(clientId)
+      setRecurringJobs(data)
+    } catch (error) {
+      console.error('Error loading recurring jobs:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [clientId])
+
+  useEffect(() => {
+    loadRecurringJobs()
+  }, [loadRecurringJobs])
+
+  const getFrequencyLabel = (frequency: string) => {
+    switch (frequency) {
+      case 'daily': return 'Daily'
+      case 'weekly': return 'Weekly' 
+      case 'bi_weekly': return 'Bi-weekly'
+      case 'monthly': return 'Monthly'
+      default: return frequency
+    }
+  }
+
+  if (loading) {
+    return <div className="text-center py-4">Loading recurring jobs...</div>
+  }
+
+  if (recurringJobs.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <RefreshCw className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+        <p>No recurring jobs set up for this client</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {recurringJobs.map((recurringJob) => (
+        <div key={recurringJob.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center space-x-2 mb-2">
+                <RefreshCw className="h-4 w-4 text-blue-600" />
+                <h4 className="font-medium text-gray-900">{recurringJob.title}</h4>
+                <Badge variant="outline" className="text-xs">
+                  {getFrequencyLabel(recurringJob.frequency)}
+                </Badge>
+              </div>
+              {recurringJob.description && (
+                <p className="text-sm text-gray-600 mb-2">{recurringJob.description}</p>
+              )}
+              <div className="flex items-center space-x-4 text-sm text-gray-500">
+                <span>Started: {formatDate(recurringJob.start_date)}</span>
+                {recurringJob.end_date && (
+                  <span>Ends: {formatDate(recurringJob.end_date)}</span>
+                )}
+                {recurringJob.scheduled_time && (
+                  <span>Time: {recurringJob.scheduled_time}</span>
+                )}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push(`/calendar?recurring=${recurringJob.id}`)}
+              className="text-blue-600 hover:text-blue-700"
+            >
+              <ExternalLink className="h-4 w-4 mr-1" />
+              View in Calendar
+            </Button>
+          </div>
+        </div>
+      ))}
+      <div className="text-center py-4">
+        <p className="text-sm text-gray-500">
+          To edit individual instances, use the calendar view above.
+        </p>
+      </div>
+    </div>
+  )
 }
 
 // Component to display jobs for a client with smart pagination
@@ -67,7 +174,9 @@ function ClientJobsList({ clientId }: { clientId: string }) {
       const limit = 10
       const offset = (pageNum - 1) * limit
       
-      const jobsData = await getJobsForClient(clientId, limit, offset)
+      // Get jobs but exclude recurring job instances to avoid duplication
+      const allJobs = await getJobsForClient(clientId, limit, offset)
+      const jobsData = allJobs.filter(job => !job.recurring_job_id)
       
       if (append) {
         setJobs(prev => [...prev, ...jobsData])
@@ -231,6 +340,7 @@ export default function ClientDetailsPage() {
     phone: "",
     address: ""
   })
+  const [aiSuggestionsData, setAiSuggestionsData] = useState<any>(null)
 
   const fetchClientDetails = useCallback(async (clientId: string) => {
     try {
@@ -243,29 +353,59 @@ export default function ClientDetailsPage() {
       
       console.log('Fetching client details for ID:', clientId)
       
-      // Fetch client details and recent jobs data
-      const [clientData, jobsData] = await Promise.all([
+      // Fetch client details, jobs data, and AI suggestions data
+      const [clientData, jobsData, recurringJobsData, completionHistoryData] = await Promise.all([
         getClient(clientId),
-        getJobsForClient(clientId, 50) // Get first 50 jobs for statistics
+        getJobsForClient(clientId, 50), // Get first 50 jobs for statistics
+        getRecurringJobsForClient(clientId),
+        getClientTaskCompletionHistory(clientId)
       ])
       
       if (clientData) {
-        // Calculate job statistics for this client
+        // Calculate comprehensive job statistics for this client
         const clientJobs = jobsData || []
+        const recurringJobs = recurringJobsData || []
+        
         const totalJobs = clientJobs.length
         const completedJobs = clientJobs.filter(job => job.status === 'completed').length
-        // const upcomingJobs = clientJobs.filter(job => ['scheduled', 'in_progress'].includes(job.status)).length
+        const upcomingJobs = clientJobs.filter(job => ['scheduled', 'in_progress'].includes(job.status)).length
+        const totalRecurringJobs = recurringJobs.length
+        
+        // Calculate completion rate
+        const completionRate = totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 0
         
         // Calculate total revenue (assuming a fixed rate per job for now)
-        // In a real app, you'd have a pricing table or job-specific pricing
         const revenuePerJob = 150 // This could be configurable or job-specific
         const totalRevenue = completedJobs * revenuePerJob
+        
+        // Calculate average task completion from history
+        const avgTaskCompletion = completionHistoryData.length > 0 
+          ? Math.round(completionHistoryData.reduce((sum, history) => {
+              const rate = history.total_tasks > 0 ? (history.completed_tasks / history.total_tasks) * 100 : 0
+              return sum + rate
+            }, 0) / completionHistoryData.length)
+          : 0
+        
+        // Find last job date
+        const sortedJobs = clientJobs.sort((a, b) => new Date(b.scheduled_date).getTime() - new Date(a.scheduled_date).getTime())
+        const lastJobDate = sortedJobs.length > 0 ? sortedJobs[0].scheduled_date : null
+        
+        // Calculate days since last job
+        const daysSinceLastJob = lastJobDate 
+          ? Math.floor((new Date().getTime() - new Date(lastJobDate).getTime()) / (1000 * 60 * 60 * 24))
+          : null
         
         const clientWithStats: ClientWithDetails = {
           ...clientData,
           totalJobs,
           completedJobs,
-          totalRevenue
+          totalRevenue,
+          upcomingJobs,
+          totalRecurringJobs,
+          completionRate,
+          avgTaskCompletion,
+          lastJobDate,
+          daysSinceLastJob
         }
         
         setClient(clientWithStats)
@@ -277,6 +417,14 @@ export default function ClientDetailsPage() {
         }
         setFormData(initialFormData)
         setOriginalFormData(initialFormData)
+
+        // Set AI suggestions data
+        setAiSuggestionsData({
+          name: clientData.name,
+          propertyType: clientData.property_type || 'residential',
+          recurringJobs: recurringJobsData || [],
+          completionHistory: completionHistoryData || []
+        })
       } else {
         toast({
           title: "Error",
@@ -627,6 +775,71 @@ export default function ClientDetailsPage() {
         </div>
       </div>
 
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-600">Total Jobs</p>
+                <p className="text-2xl font-bold text-blue-900">{client.totalJobs || 0}</p>
+                <p className="text-xs text-blue-700 mt-1">
+                  {client.upcomingJobs || 0} upcoming
+                </p>
+              </div>
+              <Briefcase className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-green-200 bg-gradient-to-br from-green-50 to-green-100">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-green-600">Completed</p>
+                <p className="text-2xl font-bold text-green-900">{client.completedJobs || 0}</p>
+                <p className="text-xs text-green-700 mt-1">
+                  {client.completionRate || 0}% completion rate
+                </p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-purple-200 bg-gradient-to-br from-purple-50 to-purple-100">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-purple-600">Revenue</p>
+                <p className="text-2xl font-bold text-purple-900">${(client.totalRevenue || 0).toLocaleString()}</p>
+                <p className="text-xs text-purple-700 mt-1">
+                  {client.totalRecurringJobs || 0} recurring jobs
+                </p>
+              </div>
+              <DollarSign className="h-8 w-8 text-purple-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-orange-200 bg-gradient-to-br from-orange-50 to-orange-100">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-orange-600">Performance</p>
+                <p className="text-2xl font-bold text-orange-900">{client.avgTaskCompletion || 0}%</p>
+                <p className="text-xs text-orange-700 mt-1">
+                  {client.daysSinceLastJob !== null 
+                    ? `${client.daysSinceLastJob} days ago` 
+                    : 'No jobs yet'}
+                </p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-orange-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Unsaved Changes Dialog */}
       <Dialog open={isUnsavedChangesDialogOpen} onOpenChange={setIsUnsavedChangesDialogOpen}>
         <DialogContent>
@@ -648,44 +861,135 @@ export default function ClientDetailsPage() {
       </Dialog>
 
       {/* Quick Actions */}
-      <Card className="border-slate-200">
-        <CardHeader>
-          <CardTitle className="text-slate-900">Quick Actions</CardTitle>
+      <Card className="border-slate-200 bg-gradient-to-r from-slate-50 to-gray-50">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-slate-900 flex items-center">
+              <Activity className="h-5 w-5 mr-2" />
+              Quick Actions
+            </CardTitle>
+            <Badge variant="secondary" className="text-xs">
+              8 actions available
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Button variant="outline" onClick={handleScheduleJob} className="h-auto py-3 flex flex-col items-center space-y-1">
-              <Clock className="h-5 w-5" />
-              <span className="text-xs">Schedule Job</span>
-            </Button>
-            <Button variant="outline" onClick={handleViewJobs} className="h-auto py-3 flex flex-col items-center space-y-1">
-              <ExternalLink className="h-5 w-5" />
-              <span className="text-xs">View Jobs</span>
-            </Button>
-            <Button variant="outline" onClick={handleViewHistory} className="h-auto py-3 flex flex-col items-center space-y-1">
-              <History className="h-5 w-5" />
-              <span className="text-xs">View History</span>
-            </Button>
-            <Button variant="outline" onClick={handleSendEmail} className="h-auto py-3 flex flex-col items-center space-y-1">
-              <Mail className="h-5 w-5" />
-              <span className="text-xs">Send Email</span>
-            </Button>
-            <Button variant="outline" onClick={handleSendMessage} className="h-auto py-3 flex flex-col items-center space-y-1">
-              <MessageSquare className="h-5 w-5" />
-              <span className="text-xs">Send SMS</span>
-            </Button>
-            <Button variant="outline" onClick={handleCallClient} className="h-auto py-3 flex flex-col items-center space-y-1">
-              <Phone className="h-5 w-5" />
-              <span className="text-xs">Call Client</span>
-            </Button>
-            <Button variant="outline" onClick={handleCreateReport} className="h-auto py-3 flex flex-col items-center space-y-1">
-              <FileText className="h-5 w-5" />
-              <span className="text-xs">Create Report</span>
-            </Button>
-            <Button variant="outline" onClick={handleCopyInfo} className="h-auto py-3 flex flex-col items-center space-y-1">
-              <Copy className="h-5 w-5" />
-              <span className="text-xs">Copy Info</span>
-            </Button>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Primary Actions */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-700 flex items-center">
+                <Briefcase className="h-4 w-4 mr-1" />
+                Job Management
+              </h3>
+              <div className="space-y-2">
+                <Button 
+                  onClick={handleScheduleJob} 
+                  className="w-full justify-start h-auto py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                >
+                  <Clock className="h-4 w-4 mr-3" />
+                  <div className="text-left">
+                    <div className="font-medium">Schedule Job</div>
+                    <div className="text-xs opacity-90">Create a new job for this client</div>
+                  </div>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleViewJobs} 
+                  className="w-full justify-start h-auto py-3 px-4 hover:bg-blue-50 border-blue-200"
+                >
+                  <ExternalLink className="h-4 w-4 mr-3" />
+                  <div className="text-left">
+                    <div className="font-medium">View Jobs</div>
+                    <div className="text-xs text-gray-600">See all client jobs</div>
+                  </div>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleViewHistory} 
+                  className="w-full justify-start h-auto py-3 px-4 hover:bg-blue-50 border-blue-200"
+                >
+                  <History className="h-4 w-4 mr-3" />
+                  <div className="text-left">
+                    <div className="font-medium">View History</div>
+                    <div className="text-xs text-gray-600">Past job records</div>
+                  </div>
+                </Button>
+              </div>
+            </div>
+
+            {/* Communication Actions */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-700 flex items-center">
+                <MessageSquare className="h-4 w-4 mr-1" />
+                Communication
+              </h3>
+              <div className="space-y-2">
+                <Button 
+                  variant="outline" 
+                  onClick={handleSendEmail} 
+                  className="w-full justify-start h-auto py-3 px-4 hover:bg-green-50 border-green-200"
+                >
+                  <Mail className="h-4 w-4 mr-3" />
+                  <div className="text-left">
+                    <div className="font-medium">Send Email</div>
+                    <div className="text-xs text-gray-600">Email communication</div>
+                  </div>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleSendMessage} 
+                  className="w-full justify-start h-auto py-3 px-4 hover:bg-green-50 border-green-200"
+                >
+                  <MessageSquare className="h-4 w-4 mr-3" />
+                  <div className="text-left">
+                    <div className="font-medium">Send SMS</div>
+                    <div className="text-xs text-gray-600">Text message</div>
+                  </div>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleCallClient} 
+                  className="w-full justify-start h-auto py-3 px-4 hover:bg-green-50 border-green-200"
+                >
+                  <Phone className="h-4 w-4 mr-3" />
+                  <div className="text-left">
+                    <div className="font-medium">Call Client</div>
+                    <div className="text-xs text-gray-600">Voice call</div>
+                  </div>
+                </Button>
+              </div>
+            </div>
+
+            {/* Reporting & Utilities */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-700 flex items-center">
+                <FileText className="h-4 w-4 mr-1" />
+                Reporting & Tools
+              </h3>
+              <div className="space-y-2">
+                <Button 
+                  onClick={handleCreateReport} 
+                  className="w-full justify-start h-auto py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
+                >
+                  <FileText className="h-4 w-4 mr-3" />
+                  <div className="text-left">
+                    <div className="font-medium">Create Report</div>
+                    <div className="text-xs opacity-90">Generate job report</div>
+                  </div>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleCopyInfo} 
+                  className="w-full justify-start h-auto py-3 px-4 hover:bg-gray-50 border-gray-200"
+                >
+                  <Copy className="h-4 w-4 mr-3" />
+                  <div className="text-left">
+                    <div className="font-medium">Copy Info</div>
+                    <div className="text-xs text-gray-600">Copy client details</div>
+                  </div>
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -888,13 +1192,52 @@ export default function ClientDetailsPage() {
             </CardContent>
           </Card>
 
+          {/* Recurring Jobs */}
+          <Card className="border-slate-200">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-slate-900">Recurring Jobs</CardTitle>
+                <CardDescription>
+                  Scheduled recurring jobs for this client
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push('/calendar')}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                View Calendar
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <ClientRecurringJobsList clientId={client.id} />
+            </CardContent>
+          </Card>
+
+          {/* AI Task Suggestions */}
+          {aiSuggestionsData && (
+            <TaskSuggestions
+              clientId={client.id}
+              clientData={aiSuggestionsData}
+              showGenerateButton={true}
+              onTaskAdded={(task) => {
+                // Handle task added - could refresh data or show success message
+                toast({
+                  title: "Task Added",
+                  description: `"${task.title}" has been added to your task suggestions.`,
+                })
+              }}
+            />
+          )}
+
           {/* Recent Jobs */}
           <Card className="border-slate-200">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-slate-900">Recent Jobs</CardTitle>
                 <CardDescription>
-                  Latest jobs for this client, including recurring job instances
+                  Latest individual job instances (excluding recurring jobs)
                 </CardDescription>
               </div>
               <Button

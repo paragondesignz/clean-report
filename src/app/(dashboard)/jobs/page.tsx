@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
 import { Plus, Calendar, Clock, CheckCircle, AlertCircle, XCircle, DollarSign, Building2 } from "lucide-react"
-import { getJobs, deleteJob, getClients, testDatabaseConnection, checkRequiredTables } from "@/lib/supabase-client"
+import { getJobs, getJobsCount, deleteJob, deleteRecurringJob, getClients, testDatabaseConnection, checkRequiredTables } from "@/lib/supabase-client"
 import { formatTime, formatListDate } from "@/lib/utils"
 import { DataTable } from "@/components/ui/data-table"
+import { RecurringJobDeleteDialog } from "@/components/recurring-job-delete-dialog"
 import type { Job, Client, JobWithClient } from "@/types/database"
 
 export default function JobsPage() {
@@ -19,10 +20,17 @@ export default function JobsPage() {
   const [jobs, setJobs] = useState<JobWithClient[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [jobToDelete, setJobToDelete] = useState<JobWithClient | null>(null)
+  const [totalJobsCount, setTotalJobsCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState(0)
+  const JOBS_PER_PAGE = 20
 
-  const fetchData = useCallback(async () => {
+  const fetchInitialData = useCallback(async () => {
     try {
       setLoading(true)
+      setCurrentPage(0)
       
       // Check environment variables
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -56,12 +64,17 @@ export default function JobsPage() {
         throw new Error(`Missing tables: ${tableCheck.missingTables.map(t => t.table).join(', ')}`)
       }
       
-      const [jobsData, clientsData] = await Promise.all([
-        getJobs(),
-        getClients()
+      // Fetch total count and initial jobs data
+      const [jobsData, clientsData, totalCount] = await Promise.all([
+        getJobs(JOBS_PER_PAGE, 0),
+        getClients(),
+        getJobsCount()
       ])
+      
+      console.log('Initial jobs data fetched:', jobsData?.length || 0, 'jobs out of', totalCount, 'total')
       setJobs(jobsData || [])
       setClients(clientsData || [])
+      setTotalJobsCount(totalCount)
     } catch (error) {
       console.error('Error fetching data:', error)
       console.error('Error details:', {
@@ -74,25 +87,74 @@ export default function JobsPage() {
         description: error instanceof Error ? error.message : "Failed to load jobs",
         variant: "destructive"
       })
+      setJobs([])
+      setClients([])
+      setTotalJobsCount(0)
     } finally {
       setLoading(false)
     }
   }, [toast])
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
-
-  const handleDelete = async (jobId: string) => {
-    if (!confirm("Are you sure you want to delete this job?")) return
+  const loadMoreJobs = useCallback(async () => {
+    if (loadingMore || jobs.length >= totalJobsCount) return
     
     try {
-      await deleteJob(jobId)
+      setLoadingMore(true)
+      const nextPage = currentPage + 1
+      const offset = nextPage * JOBS_PER_PAGE
+      
+      console.log('Loading more jobs, page:', nextPage, 'offset:', offset)
+      const moreJobs = await getJobs(JOBS_PER_PAGE, offset)
+      
+      if (moreJobs && moreJobs.length > 0) {
+        setJobs(prevJobs => [...prevJobs, ...moreJobs])
+        setCurrentPage(nextPage)
+        console.log('Loaded', moreJobs.length, 'more jobs')
+      }
+    } catch (error) {
+      console.error('Error loading more jobs:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load more jobs",
+        variant: "destructive"
+      })
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [jobs.length, totalJobsCount, currentPage, loadingMore, toast])
+
+  useEffect(() => {
+    fetchInitialData()
+  }, [fetchInitialData])
+
+  const handleDeleteClick = (job: JobWithClient) => {
+    setJobToDelete(job)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDelete = async (deleteType: 'single' | 'all' | 'future') => {
+    if (!jobToDelete) return
+    
+    try {
+      if (jobToDelete.recurring_job_id) {
+        // Use recurring job deletion logic
+        await deleteRecurringJob(jobToDelete.id, deleteType)
+      } else {
+        // Use simple job deletion for non-recurring jobs
+        await deleteJob(jobToDelete.id)
+      }
+      
+      const messages = {
+        single: "Job instance deleted successfully",
+        future: "Job and future instances deleted successfully", 
+        all: "All recurring job instances deleted successfully"
+      }
+      
       toast({
         title: "Success",
-        description: "Job deleted successfully"
+        description: jobToDelete.recurring_job_id ? messages[deleteType] : "Job deleted successfully"
       })
-      fetchData()
+      fetchInitialData()
     } catch (error) {
       console.error('Error deleting job:', error)
       toast({
@@ -317,33 +379,77 @@ export default function JobsPage() {
 
 
   return (
-    <DataTable
-      title="Jobs"
-      description="Manage your cleaning service jobs"
-      data={tableData}
-      columns={columns}
-      addButton={{
-        href: "/jobs/new",
-        label: "New Job",
-        icon: Plus
-      }}
-      onRowClick={(row) => `/jobs/${row.id}`}
-      onDelete={handleDelete}
-      searchPlaceholder="Search jobs by title, client, or description..."
-      filterOptions={[
-        { key: 'status', label: 'Status', options: [
-          { value: 'scheduled', label: 'Scheduled' },
-          { value: 'in_progress', label: 'In Progress' },
-          { value: 'completed', label: 'Completed' },
-          { value: 'cancelled', label: 'Cancelled' },
-          { value: 'enquiry', label: 'Enquiry' }
-        ]},
-        { key: 'priority', label: 'Priority', options: [
-          { value: 'High', label: 'High' },
-          { value: 'Medium', label: 'Medium' },
-          { value: 'Low', label: 'Low' }
+    <>
+      <DataTable
+        title="Jobs"
+        description="Manage your cleaning service jobs"
+        data={tableData}
+        columns={columns}
+        addButton={{
+          href: "/jobs/new",
+          label: "New Job",
+          icon: Plus
+        }}
+        onRowClick={(row) => `/jobs/${row.id}`}
+        onDelete={(jobId) => {
+          const job = jobs.find(j => j.id === jobId)
+          if (job) handleDeleteClick(job)
+        }}
+        searchPlaceholder="Search jobs by title, client, or description..."
+        filterOptions={[
+          { key: 'status', label: 'Status', options: [
+            { value: 'scheduled', label: 'Scheduled' },
+            { value: 'in_progress', label: 'In Progress' },
+            { value: 'completed', label: 'Completed' },
+            { value: 'cancelled', label: 'Cancelled' },
+            { value: 'enquiry', label: 'Enquiry' }
+          ]},
+          { key: 'priority', label: 'Priority', options: [
+            { value: 'High', label: 'High' },
+            { value: 'Medium', label: 'Medium' },
+            { value: 'Low', label: 'Low' }
+          ]}
         ]}
-      ]}
-    />
+      />
+
+      {/* Load More Button */}
+      {jobs.length < totalJobsCount && (
+        <div className="flex justify-center py-6">
+          <Button
+            onClick={loadMoreJobs}
+            disabled={loadingMore}
+            variant="outline"
+            size="lg"
+          >
+            {loadingMore ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+                Loading more jobs...
+              </>
+            ) : (
+              <>
+                Load More Jobs ({jobs.length} of {totalJobsCount})
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+
+      {/* Show "All jobs loaded" when at the end */}
+      {jobs.length >= totalJobsCount && totalJobsCount > JOBS_PER_PAGE && (
+        <div className="text-center py-6 text-gray-500">
+          All {totalJobsCount} jobs loaded
+        </div>
+      )}
+
+      {/* Recurring Job Delete Dialog */}
+      <RecurringJobDeleteDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onDelete={handleDelete}
+        jobTitle={jobToDelete?.title || ''}
+        isRecurring={!!jobToDelete?.recurring_job_id}
+      />
+    </>
   )
 } 

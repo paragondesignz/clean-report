@@ -58,7 +58,7 @@ export function GoogleMaps({
         const defaultPosition = { lat: -36.8485, lng: 174.7633 }
         
         let mapPosition = defaultPosition
-        let mapAddress = address
+        const mapAddress = address
 
         // If we have coordinates, use them
         if (latitude && longitude) {
