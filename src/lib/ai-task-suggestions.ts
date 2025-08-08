@@ -1,8 +1,12 @@
 import { OpenAI } from 'openai'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+// Initialize OpenAI only if API key is available
+let openai: OpenAI | null = null
+if (process.env.OPENAI_API_KEY) {
+  openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+  })
+}
 
 export interface TaskPattern {
   taskName: string
@@ -66,6 +70,12 @@ export interface ClientAnalysisData {
 
 class AITaskSuggestionEngine {
   private async analyzeTaskPatterns(clientData: ClientAnalysisData): Promise<string> {
+    // Check if OpenAI is available
+    if (!openai) {
+      console.warn('OpenAI not available - API key not configured')
+      throw new Error('AI analysis not available - API key not configured')
+    }
+
     const prompt = `
 You are an AI assistant specialized in commercial and residential cleaning operations. Analyze the following client data and provide intelligent task suggestions.
 

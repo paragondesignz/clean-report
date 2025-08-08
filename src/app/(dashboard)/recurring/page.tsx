@@ -327,7 +327,7 @@ export default function RecurringJobsPage() {
     status: job.is_active,
     frequency: job.frequency,
     startDate: formatListDate(job.start_date),
-    endDate: job.end_date ? formatListDate(job.end_date) : null,
+    endDate: job.end_date ? formatListDate(job.end_date) : 'No end date',
     scheduledTime: formatTime(job.scheduled_time),
     value: getRecurringValue(job),
     lastUpdated: getLastUpdated(job),

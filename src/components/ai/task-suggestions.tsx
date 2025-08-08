@@ -101,9 +101,13 @@ export function TaskSuggestions({
 
     } catch (error) {
       console.error('Error generating suggestions:', error)
+      const errorMessage = error instanceof Error && error.message.includes('API key not configured') 
+        ? "AI suggestions require OpenAI API key configuration. Please contact administrator."
+        : "Could not generate suggestions. Please try again."
+      
       toast({
         title: "Generation Failed",
-        description: "Could not generate suggestions. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       })
     } finally {
