@@ -1082,11 +1082,11 @@ export default function ClientDetailsPage() {
             </CardContent>
           </Card>
 
-          {/* Notes using JobNotes component */}
+          {/* Notes using unified JobNotes component */}
           <JobNotes 
-            jobId={client.id} 
-            jobTitle={`Client: ${client.name}`}
-            isRecurringJob={false}
+            entityId={client.id} 
+            entityTitle={client.name}
+            context="client"
           />
         </div>
 

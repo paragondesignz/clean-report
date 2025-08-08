@@ -40,13 +40,30 @@ interface JobNote {
 }
 
 interface JobNotesProps {
-  jobId: string
-  jobTitle: string
+  entityId: string // Can be jobId, clientId, or recurringJobId
+  entityTitle: string
+  context: 'job' | 'client' | 'recurring_job'
+  // Legacy props for backward compatibility
+  jobId?: string
+  jobTitle?: string
   isRecurringJob?: boolean
   recurringJobId?: string
 }
 
-export function JobNotes({ jobId, jobTitle, isRecurringJob = false, recurringJobId }: JobNotesProps) {
+export function JobNotes({ 
+  entityId, 
+  entityTitle, 
+  context = 'job',
+  // Legacy props for backward compatibility
+  jobId,
+  jobTitle,
+  isRecurringJob = false, 
+  recurringJobId 
+}: JobNotesProps) {
+  // Handle backward compatibility
+  const actualEntityId = entityId || jobId || recurringJobId || ''
+  const actualEntityTitle = entityTitle || jobTitle || ''
+  const actualContext = entityId ? context : (recurringJobId ? 'recurring_job' : 'job')
   const { toast } = useToast()
   const [notes, setNotes] = useState<JobNote[]>([])
   const [loading, setLoading] = useState(false)
@@ -58,15 +75,45 @@ export function JobNotes({ jobId, jobTitle, isRecurringJob = false, recurringJob
   const [editCategory, setEditCategory] = useState<JobNote['category']>("general")
 
   useEffect(() => {
-    loadNotes()
-  }, [jobId])
+    if (actualEntityId) {
+      loadNotes()
+    }
+  }, [actualEntityId, actualContext])
 
   const loadNotes = async () => {
     try {
       setLoading(true)
-      const data = await getNotes(jobId)
+      let data = []
+      
+      // Load notes based on context
+      switch (actualContext) {
+        case 'recurring_job':
+          // Try to use recurring job notes if available, fallback to regular notes
+          try {
+            const { getRecurringJobNotes } = await import('@/lib/supabase-client')
+            data = await getRecurringJobNotes(actualEntityId)
+          } catch (error) {
+            console.warn('Recurring job notes not available, using regular notes')
+            data = await getNotes(actualEntityId)
+          }
+          break
+        case 'client':
+          // For clients, we'll use regular notes with the client ID as job_id
+          try {
+            data = await getNotes(actualEntityId)
+          } catch (error) {
+            console.warn('Client notes not available, starting with empty notes')
+            data = []
+          }
+          break
+        case 'job':
+        default:
+          data = await getNotes(actualEntityId)
+          break
+      }
+      
       // Convert notes to match our interface (add category if missing)
-      const notesWithCategories = data.map(note => ({
+      const notesWithCategories = (data || []).map(note => ({
         ...note,
         category: note.category || 'general' as JobNote['category']
       }))
@@ -75,7 +122,7 @@ export function JobNotes({ jobId, jobTitle, isRecurringJob = false, recurringJob
       console.error('Error loading notes:', error)
       toast({
         title: "Error Loading Notes",
-        description: "Could not load job notes.",
+        description: `Could not load ${actualContext} notes.`,
         variant: "destructive"
       })
     } finally {
@@ -87,23 +134,45 @@ export function JobNotes({ jobId, jobTitle, isRecurringJob = false, recurringJob
     if (!newNoteContent.trim()) return
 
     try {
-      const noteData = {
-        job_id: jobId,
-        content: newNoteContent.trim(),
-        category: newNoteCategory
-      }
+      let note
       
-      const note = await createNote(noteData)
+      // Create note based on context
+      switch (actualContext) {
+        case 'recurring_job':
+          try {
+            const { addRecurringJobNote } = await import('@/lib/supabase-client')
+            note = await addRecurringJobNote(actualEntityId, newNoteContent.trim(), newNoteCategory)
+          } catch (error) {
+            console.warn('Recurring job notes not available, using regular notes')
+            const noteData = { job_id: actualEntityId, content: newNoteContent.trim(), category: newNoteCategory }
+            note = await createNote(noteData)
+          }
+          break
+        case 'client':
+        case 'job':
+        default:
+          const noteData = {
+            job_id: actualEntityId,
+            content: newNoteContent.trim(),
+            category: newNoteCategory
+          }
+          note = await createNote(noteData)
+          break
+      }
       setNotes(prev => [note, ...prev])
       setNewNoteContent("")
       setNewNoteCategory("general")
       setIsAddingNote(false)
 
+      const contextMessage = actualContext === 'recurring_job' 
+        ? "Note has been added and will be visible on all job instances."
+        : actualContext === 'client'
+        ? "Note has been added to this client."
+        : "Note has been added to this job."
+      
       toast({
         title: "Note Added",
-        description: isRecurringJob 
-          ? "Note added to this job instance and will be visible on all future instances."
-          : "Job note has been saved.",
+        description: contextMessage,
         duration: 3000
       })
     } catch (error) {
@@ -244,18 +313,25 @@ export function JobNotes({ jobId, jobTitle, isRecurringJob = false, recurringJob
           </Button>
         </div>
         <CardDescription className="flex items-center space-x-2">
-          {isRecurringJob ? (
+          {actualContext === 'recurring_job' ? (
             <>
               <RefreshCw className="h-4 w-4" />
               <span>
-                Notes for "{jobTitle}" - visible across all job instances for workers on-site
+                Notes for "{actualEntityTitle}" - visible across all job instances for workers on-site
+              </span>
+            </>
+          ) : actualContext === 'client' ? (
+            <>
+              <User className="h-4 w-4" />
+              <span>
+                Client notes and observations for "{actualEntityTitle}"
               </span>
             </>
           ) : (
             <>
               <Calendar className="h-4 w-4" />
               <span>
-                Notes and observations for "{jobTitle}"
+                Notes and observations for "{actualEntityTitle}"
               </span>
             </>
           )}

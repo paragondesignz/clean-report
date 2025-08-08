@@ -69,7 +69,6 @@ import { GoogleMaps } from "@/components/ui/google-maps"
 import { JobSubContractorAssignment } from "@/components/job-sub-contractor-assignment"
 import { RecurringJobDeleteDialog } from "@/components/recurring-job-delete-dialog"
 import { RecurringTaskDialog } from "@/components/recurring-task-dialog"
-import { RecurringJobNotes } from "@/components/recurring-job-notes"
 import { JobNotes } from "@/components/job-notes"
 import type { Job, Client, Task, Note, Photo } from "@/types/database"
 
@@ -1012,20 +1011,11 @@ export default function JobDetailsPage() {
             </CardContent>
           </Card>
 
-          {/* Recurring Job Notes */}
-          {job?.recurring_job_id && (
-            <RecurringJobNotes 
-              recurringJobId={job.recurring_job_id} 
-              jobTitle={job.title}
-            />
-          )}
-
-          {/* Enhanced Job Notes */}
+          {/* Unified Notes System */}
           <JobNotes 
-            jobId={job.id} 
-            jobTitle={job.title}
-            isRecurringJob={!!job.recurring_job_id}
-            recurringJobId={job.recurring_job_id || undefined}
+            entityId={job.recurring_job_id || job.id}
+            entityTitle={job.title}
+            context={job.recurring_job_id ? "recurring_job" : "job"}
           />
 
           {/* Photos */}
