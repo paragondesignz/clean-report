@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -11,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, Edit, Trash2, Calendar, Clock, User, RefreshCw, CheckCircle, XCircle, Building2, DollarSign, Play, Eye } from "lucide-react"
+import { Plus, Edit, Trash2, Calendar, Clock, User, RefreshCw, CheckCircle, XCircle, Building2, DollarSign, Play, Eye, List } from "lucide-react"
 import { getRecurringJobs, getRecurringJobsCount, createRecurringJob, updateRecurringJob, deleteRecurringJob, getClients, testRecurringJobsTable, checkRequiredTables, generateJobInstances, getRecurringJobInstances } from "@/lib/supabase-client"
 import { formatDate, formatTime, formatDistanceToNow, formatListDate } from "@/lib/utils"
 import { DataTable } from "@/components/ui/data-table"
@@ -20,6 +21,7 @@ import { UpgradePrompt } from "@/components/ui/upgrade-prompt"
 import type { RecurringJob, Client, RecurringJobWithClient, JobWithClient } from "@/types/database"
 
 export default function RecurringJobsPage() {
+  const router = useRouter()
   const { toast } = useToast()
   const { canAccessFeature, getFeatureUpgradeMessage, isPro } = useSubscription()
   const [recurringJobs, setRecurringJobs] = useState<RecurringJobWithClient[]>([])
@@ -492,6 +494,12 @@ export default function RecurringJobsPage() {
         ]}
         customActions={[
           {
+            label: 'View Details',
+            icon: Eye,
+            onClick: (row) => router.push(`/recurring/${row.id}`),
+            variant: 'outline'
+          },
+          {
             label: 'Generate Instances',
             icon: Play,
             onClick: (row) => handleGenerateInstances(row.id),
@@ -499,7 +507,7 @@ export default function RecurringJobsPage() {
           },
           {
             label: 'View Instances',
-            icon: Eye,
+            icon: List,
             onClick: (row) => handleViewInstances(row.id),
             variant: 'outline'
           },

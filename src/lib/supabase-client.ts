@@ -1376,6 +1376,27 @@ export const updateRecurringJob = async (id: string, jobData: Partial<{
   return data
 }
 
+// Get a single recurring job by ID
+export const getRecurringJob = async (recurringJobId: string) => {
+  try {
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { data, error } = await getSupabaseClient()
+      .from('recurring_jobs')
+      .select('*')
+      .eq('id', recurringJobId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error('Error fetching recurring job:', error)
+    throw error
+  }
+}
+
 export const getJobsForRecurringJob = async (recurringJobId: string) => {
   try {
     const { data: { user } } = await getSupabaseClient().auth.getUser()
