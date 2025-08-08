@@ -6,13 +6,32 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const accessCode = searchParams.get('access')
     
+    // Validate access code is provided
+    if (!accessCode) {
+      return NextResponse.json(
+        { error: 'Access code is required' },
+        { status: 401 }
+      )
+    }
+    
     // Create service client for admin-level access
     const supabase = createServiceClient()
     
-    // For now, we'll skip password verification and just return jobs
-    // In a production app, you'd verify the access code against user_profiles
+    // Verify the access code against user_profiles
+    const { data: userProfile, error: authError } = await supabase
+      .from('user_profiles')
+      .select('user_id')
+      .eq('mobile_access_code', accessCode)
+      .single()
     
-    // Get all jobs (scheduled, in progress, and completed)
+    if (authError || !userProfile) {
+      return NextResponse.json(
+        { error: 'Invalid access code' },
+        { status: 401 }
+      )
+    }
+    
+    // Get jobs for the authenticated user
     const { data: jobs, error } = await supabase
       .from('jobs')
       .select(`
@@ -42,6 +61,7 @@ export async function GET(request: NextRequest) {
           created_at
         )
       `)
+      .eq('user_id', userProfile.user_id)
       .in('status', ['scheduled', 'in_progress', 'completed'])
       .order('scheduled_date', { ascending: true })
 

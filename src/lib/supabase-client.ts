@@ -10,6 +10,14 @@ export const supabase = supabaseUrl && supabaseAnonKey
   ? createBrowserClient<Database>(supabaseUrl, supabaseAnonKey)
   : null
 
+// Helper to ensure supabase client is available
+const getSupabaseClient = () => {
+  if (!supabase) {
+    throw new Error('Supabase is not configured. Please check your environment variables.')
+  }
+  return supabase
+}
+
 // Server-side Supabase client
 export const createServerClient = () => {
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -31,7 +39,7 @@ export const getCurrentUser = async () => {
   if (!supabase) {
     throw new Error('Supabase is not configured')
   }
-  const { data: { user }, error } = await supabase.auth.getUser()
+  const { data: { user }, error } = await getSupabaseClient().auth.getUser()
   if (error) throw error
   return user
 }
@@ -40,20 +48,17 @@ export const signOut = async () => {
   if (!supabase) {
     throw new Error('Supabase is not configured')
   }
-  const { error } = await supabase.auth.signOut()
+  const { error } = await getSupabaseClient().auth.signOut()
   if (error) throw error
 }
 
 // Client operations
 export const getClients = async () => {
   try {
-    // Check environment variables
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Missing Supabase environment variables')
-    }
+    const client = getSupabaseClient()
 
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await client.auth.getUser()
     if (userError) {
       console.error('Authentication error in getClients:', userError)
       throw new Error(`Authentication error: ${userError.message}`)
@@ -64,7 +69,7 @@ export const getClients = async () => {
 
     console.log('Fetching clients for user:', user.id)
 
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from('clients')
       .select('*')
       .eq('user_id', user.id)
@@ -96,7 +101,7 @@ export const createClientRecord = async (clientData: {
     }
 
     // Get current user to ensure authentication
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       throw new Error(`Authentication error: ${userError.message}`)
     }
@@ -110,7 +115,7 @@ export const createClientRecord = async (clientData: {
       user_id: user.id
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('clients')
       .insert([clientDataWithUser])
       .select()
@@ -135,7 +140,7 @@ export const updateClientRecord = async (id: string, clientData: Partial<{
   address: string
 }>) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('clients')
       .update(clientData)
       .eq('id', id)
@@ -155,7 +160,7 @@ export const updateClientRecord = async (id: string, clientData: Partial<{
 }
 
 export const deleteClientRecord = async (id: string) => {
-  const { error } = await supabase
+  const { error } = await getSupabaseClient()
     .from('clients')
     .delete()
     .eq('id', id)
@@ -171,7 +176,7 @@ export const getClient = async (clientId: string) => {
     }
 
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       console.error('Authentication error in getClient:', userError)
       throw new Error(`Authentication error: ${userError.message}`)
@@ -182,7 +187,7 @@ export const getClient = async (clientId: string) => {
 
     console.log('Fetching client with ID:', clientId, 'for user:', user.id)
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('clients')
       .select('*')
       .eq('id', clientId)
@@ -225,7 +230,7 @@ export const getJobs = async (limit?: number, offset?: number) => {
     }
 
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       console.error('Authentication error in getJobs:', userError)
       throw new Error(`Authentication error: ${userError.message}`)
@@ -236,7 +241,7 @@ export const getJobs = async (limit?: number, offset?: number) => {
 
     console.log('Fetching jobs for user:', user.id, 'limit:', limit, 'offset:', offset)
 
-    let query = supabase
+    let query = getSupabaseClient()
       .from('jobs')
       .select(`
         *,
@@ -270,10 +275,10 @@ export const getJobs = async (limit?: number, offset?: number) => {
 
 export const getJobsCount = async () => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { count, error } = await supabase
+    const { count, error } = await getSupabaseClient()
       .from('jobs')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)
@@ -293,10 +298,10 @@ export const getJobsCount = async () => {
 // Get jobs for a specific date range (useful for calendar views)
 export const getJobsForDateRange = async (startDate: string, endDate: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('jobs')
       .select(`
         *,
@@ -319,10 +324,10 @@ export const getJobsForDateRange = async (startDate: string, endDate: string) =>
 // Get jobs for a specific client, including recurring job instances
 export const getJobsForClient = async (clientId: string, limit?: number, offset?: number) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    let query = supabase
+    let query = getSupabaseClient()
       .from('jobs')
       .select(`
         *,
@@ -367,7 +372,7 @@ export const createJob = async (jobData: {
     }
 
     // Get current user to ensure authentication
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       throw new Error(`Authentication error: ${userError.message}`)
     }
@@ -382,7 +387,7 @@ export const createJob = async (jobData: {
       agreed_hours: jobData.agreed_hours ? parseFloat(jobData.agreed_hours) : null
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('jobs')
       .insert([jobDataWithUser])
       .select()
@@ -407,7 +412,7 @@ export const updateJob = async (id: string, jobData: Partial<{
   scheduled_time: string
   status: 'enquiry' | 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
 }>) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('jobs')
     .update(jobData)
     .eq('id', id)
@@ -419,7 +424,7 @@ export const updateJob = async (id: string, jobData: Partial<{
 }
 
 export const deleteJob = async (id: string) => {
-  const { error } = await supabase
+  const { error } = await getSupabaseClient()
     .from('jobs')
     .delete()
     .eq('id', id)
@@ -433,7 +438,7 @@ export const deleteRecurringJob = async (
 ) => {
   try {
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       throw new Error(`Authentication error: ${userError.message}`)
     }
@@ -442,7 +447,7 @@ export const deleteRecurringJob = async (
     }
 
     // Get the job to check if it's recurring
-    const { data: job, error: jobError } = await supabase
+    const { data: job, error: jobError } = await getSupabaseClient()
       .from('jobs')
       .select('*, recurring_job_id')
       .eq('id', jobId)
@@ -460,7 +465,7 @@ export const deleteRecurringJob = async (
     switch (deleteType) {
       case 'single':
         // Delete only this specific job instance
-        const { error: singleDeleteError } = await supabase
+        const { error: singleDeleteError } = await getSupabaseClient()
           .from('jobs')
           .delete()
           .eq('id', jobId)
@@ -475,7 +480,7 @@ export const deleteRecurringJob = async (
         // Delete this job and all future instances with the same recurring_job_id
         if (!job.recurring_job_id) {
           // If no recurring_job_id, just delete this job
-          const { error: futureDeleteError } = await supabase
+          const { error: futureDeleteError } = await getSupabaseClient()
             .from('jobs')
             .delete()
             .eq('id', jobId)
@@ -486,7 +491,7 @@ export const deleteRecurringJob = async (
           }
         } else {
           // Delete this job and all future jobs in the series
-          const { error: futureDeleteError } = await supabase
+          const { error: futureDeleteError } = await getSupabaseClient()
             .from('jobs')
             .delete()
             .eq('recurring_job_id', job.recurring_job_id)
@@ -503,7 +508,7 @@ export const deleteRecurringJob = async (
         // Delete all instances of this recurring job series
         if (!job.recurring_job_id) {
           // If no recurring_job_id, just delete this job
-          const { error: allDeleteError } = await supabase
+          const { error: allDeleteError } = await getSupabaseClient()
             .from('jobs')
             .delete()
             .eq('id', jobId)
@@ -514,7 +519,7 @@ export const deleteRecurringJob = async (
           }
         } else {
           // Delete all jobs in the recurring series
-          const { error: allDeleteError } = await supabase
+          const { error: allDeleteError } = await getSupabaseClient()
             .from('jobs')
             .delete()
             .eq('recurring_job_id', job.recurring_job_id)
@@ -525,7 +530,7 @@ export const deleteRecurringJob = async (
           }
 
           // Also delete the recurring job template
-          const { error: recurringDeleteError } = await supabase
+          const { error: recurringDeleteError } = await getSupabaseClient()
             .from('recurring_jobs')
             .delete()
             .eq('id', job.recurring_job_id)
@@ -549,7 +554,7 @@ export const deleteRecurringJob = async (
 export const getJob = async (jobId: string) => {
   try {
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       throw new Error(`Authentication error: ${userError.message}`)
     }
@@ -558,7 +563,7 @@ export const getJob = async (jobId: string) => {
     }
 
     // First get the job with client info
-    const { data: jobData, error: jobError } = await supabase
+    const { data: jobData, error: jobError } = await getSupabaseClient()
       .from('jobs')
       .select(`
         *,
@@ -579,8 +584,8 @@ export const getJob = async (jobId: string) => {
 
     // Then get related data separately to avoid relationship issues
     const [tasksResult, notesResult] = await Promise.all([
-      supabase.from('tasks').select('*').eq('job_id', jobId),
-      supabase.from('notes').select('*').eq('job_id', jobId)
+      getSupabaseClient().from('tasks').select('*').eq('job_id', jobId),
+      getSupabaseClient().from('notes').select('*').eq('job_id', jobId)
     ])
 
     // Get photos for all tasks of this job
@@ -594,7 +599,7 @@ export const getJob = async (jobId: string) => {
     }> | null } = { data: [] }
     if (tasksResult.data && tasksResult.data.length > 0) {
       const taskIds = tasksResult.data.map(task => task.id)
-      photosResult = await supabase
+      photosResult = await getSupabaseClient()
         .from('photos')
         .select('*')
         .in('task_id', taskIds)
@@ -618,7 +623,7 @@ export const getJob = async (jobId: string) => {
 
 // Task operations
 export const getTasks = async (jobId: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('tasks')
     .select('*')
     .eq('job_id', jobId)
@@ -635,7 +640,7 @@ export const createTask = async (taskData: {
   order_index: number
 }) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('tasks')
       .insert([taskData])
       .select()
@@ -659,7 +664,7 @@ export const updateTask = async (id: string, taskData: Partial<{
   is_completed: boolean
   order_index: number
 }>) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('tasks')
     .update(taskData)
     .eq('id', id)
@@ -671,7 +676,7 @@ export const updateTask = async (id: string, taskData: Partial<{
 }
 
 export const deleteTask = async (id: string) => {
-  const { error } = await supabase
+  const { error } = await getSupabaseClient()
     .from('tasks')
     .delete()
     .eq('id', id)
@@ -682,7 +687,7 @@ export const deleteTask = async (id: string) => {
 // Note operations
 export const getNotes = async (jobId: string) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('notes')
       .select('*')
       .eq('job_id', jobId)
@@ -708,7 +713,7 @@ export const createNote = async (noteData: {
 }) => {
   try {
     // First try with category, fallback without if column doesn't exist
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('notes')
       .insert([noteData])
       .select()
@@ -718,7 +723,7 @@ export const createNote = async (noteData: {
       // If category column doesn't exist, try without it
       if (error.code === 'PGRST204' && error.message.includes('category')) {
         console.warn('Notes table does not have category column, creating note without category')
-        const { data: fallbackData, error: fallbackError } = await supabase
+        const { data: fallbackData, error: fallbackError } = await getSupabaseClient()
           .from('notes')
           .insert([{ job_id: noteData.job_id, content: noteData.content }])
           .select()
@@ -740,7 +745,7 @@ export const updateNote = async (id: string, noteData: Partial<{
   content: string
   category: string
 }>) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('notes')
     .update(noteData)
     .eq('id', id)
@@ -752,7 +757,7 @@ export const updateNote = async (id: string, noteData: Partial<{
 }
 
 export const deleteNote = async (id: string) => {
-  const { error } = await supabase
+  const { error } = await getSupabaseClient()
     .from('notes')
     .delete()
     .eq('id', id)
@@ -765,14 +770,14 @@ export const uploadPhoto = async (file: File, taskId: string) => {
   const fileName = `${Date.now()}-${file.name}`
   const filePath = `${taskId}/${fileName}`
   
-  const { data, error } = await supabase.storage
+  const { data, error } = await getSupabaseClient().storage
     .from('photos')
     .upload(filePath, file)
   
   if (error) throw error
   
   // Create photo record
-  const { data: photoData, error: photoError } = await supabase
+  const { data: photoData, error: photoError } = await getSupabaseClient()
     .from('photos')
     .insert([{
       task_id: taskId,
@@ -788,7 +793,7 @@ export const uploadPhoto = async (file: File, taskId: string) => {
 }
 
 export const getPhotos = async (taskId: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('photos')
     .select('*')
     .eq('task_id', taskId)
@@ -811,7 +816,7 @@ export const getPhotosForJob = async (jobId: string) => {
 }
 
 export const getPhotoUrl = (filePath: string) => {
-  const { data } = supabase.storage
+  const { data } = getSupabaseClient().storage
     .from('photos')
     .getPublicUrl(filePath)
   
@@ -820,14 +825,14 @@ export const getPhotoUrl = (filePath: string) => {
 
 export const deletePhoto = async (photoId: string, filePath: string) => {
   // Delete from storage
-  const { error: storageError } = await supabase.storage
+  const { error: storageError } = await getSupabaseClient().storage
     .from('photos')
     .remove([filePath])
   
   if (storageError) throw storageError
   
   // Delete from database
-  const { error: dbError } = await supabase
+  const { error: dbError } = await getSupabaseClient()
     .from('photos')
     .delete()
     .eq('id', photoId)
@@ -863,7 +868,7 @@ export const addPhoto = async (jobId: string, file: File) => {
 // Note operations
 export const addNote = async (jobId: string, content: string) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('notes')
       .insert([{
         job_id: jobId,
@@ -888,7 +893,7 @@ export const addNote = async (jobId: string, content: string) => {
 export const createReport = async (jobId: string, reportUrl: string) => {
   try {
     // Get current user for user_id
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       throw new Error(`Authentication error: ${userError.message}`)
     }
@@ -896,7 +901,7 @@ export const createReport = async (jobId: string, reportUrl: string) => {
       throw new Error('User not authenticated')
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('reports')
       .insert([{
         job_id: jobId,
@@ -923,7 +928,7 @@ export const updateReport = async (reportId: string, reportData: Partial<{
   sent_at: string
 }>) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('reports')
       .update(reportData)
       .eq('id', reportId)
@@ -950,7 +955,7 @@ export const getReports = async () => {
     }
 
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       console.error('Authentication error in getReports:', userError)
       throw new Error(`Authentication error: ${userError.message}`)
@@ -961,7 +966,7 @@ export const getReports = async () => {
 
     console.log('Fetching reports for user:', user.id)
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('reports')
       .select(`
         *,
@@ -991,7 +996,7 @@ export const getReports = async () => {
 export const getUserProfile = async () => {
   try {
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       throw new Error(`Authentication error: ${userError.message}`)
     }
@@ -1001,7 +1006,7 @@ export const getUserProfile = async () => {
 
     console.log('Getting profile for user:', user.id)
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('user_profiles')
       .select('*')
       .eq('user_id', user.id)
@@ -1067,7 +1072,7 @@ export const createUserProfile = async (profileData: {
     console.log('createUserProfile called with:', profileData)
     
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     console.log('Auth result:', { user: user?.id, error: userError })
     
     if (userError) {
@@ -1084,7 +1089,7 @@ export const createUserProfile = async (profileData: {
     }
     console.log('Inserting data:', insertData)
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('user_profiles')
       .insert([insertData])
       .select()
@@ -1117,7 +1122,7 @@ export const updateUserProfile = async (profileData: Partial<{
 }>) => {
   try {
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       throw new Error(`Authentication error: ${userError.message}`)
     }
@@ -1127,7 +1132,7 @@ export const updateUserProfile = async (profileData: Partial<{
 
     console.log('Updating profile for user:', user.id)
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('user_profiles')
       .update(profileData)
       .eq('user_id', user.id)  // Add WHERE clause
@@ -1150,7 +1155,7 @@ export const updateUserProfile = async (profileData: Partial<{
 export const getCalendarIntegration = async () => {
   try {
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       throw new Error(`Authentication error: ${userError.message}`)
     }
@@ -1158,7 +1163,7 @@ export const getCalendarIntegration = async () => {
       throw new Error('User not authenticated')
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('calendar_integrations')
       .select('*')
       .eq('user_id', user.id)
@@ -1192,12 +1197,12 @@ export const createCalendarIntegration = async (integrationData: {
   is_active?: boolean
 }) => {
   // Get current user
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await getSupabaseClient().auth.getUser()
   if (!user) {
     throw new Error('User not authenticated')
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('calendar_integrations')
     .insert([{
       ...integrationData,
@@ -1218,7 +1223,7 @@ export const updateCalendarIntegration = async (integrationData: Partial<{
 }>) => {
   try {
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       throw new Error(`Authentication error: ${userError.message}`)
     }
@@ -1226,7 +1231,7 @@ export const updateCalendarIntegration = async (integrationData: Partial<{
       throw new Error('User not authenticated')
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('calendar_integrations')
       .update(integrationData)
       .eq('user_id', user.id)
@@ -1254,7 +1259,7 @@ export const getRecurringJobs = async (limit?: number, offset?: number) => {
     }
 
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       console.error('Authentication error in getRecurringJobs:', userError)
       throw new Error(`Authentication error: ${userError.message}`)
@@ -1265,7 +1270,7 @@ export const getRecurringJobs = async (limit?: number, offset?: number) => {
 
     console.log('Fetching recurring jobs for user:', user.id, 'limit:', limit, 'offset:', offset)
 
-    let query = supabase
+    let query = getSupabaseClient()
       .from('recurring_jobs')
       .select(`
         *,
@@ -1299,10 +1304,10 @@ export const getRecurringJobs = async (limit?: number, offset?: number) => {
 
 export const getRecurringJobsCount = async () => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { count, error } = await supabase
+    const { count, error } = await getSupabaseClient()
       .from('recurring_jobs')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)
@@ -1331,12 +1336,12 @@ export const createRecurringJob = async (jobData: {
   is_active?: boolean
 }) => {
   // Get current user
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await getSupabaseClient().auth.getUser()
   if (!user) {
     throw new Error('User not authenticated')
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('recurring_jobs')
     .insert([{
       ...jobData,
@@ -1360,7 +1365,7 @@ export const updateRecurringJob = async (id: string, jobData: Partial<{
   agreed_hours?: number | null
   is_active: boolean
 }>) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('recurring_jobs')
     .update(jobData)
     .eq('id', id)
@@ -1373,10 +1378,10 @@ export const updateRecurringJob = async (id: string, jobData: Partial<{
 
 export const getJobsForRecurringJob = async (recurringJobId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('jobs')
       .select('*')
       .eq('recurring_job_id', recurringJobId)
@@ -1394,11 +1399,11 @@ export const getJobsForRecurringJob = async (recurringJobId: string) => {
 // Generate job instances from a recurring job
 export const generateJobInstances = async (recurringJobId: string, untilDate?: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
     // Get the recurring job details
-    const { data: recurringJob, error: fetchError } = await supabase
+    const { data: recurringJob, error: fetchError } = await getSupabaseClient()
       .from('recurring_jobs')
       .select('*, client:clients(name)')
       .eq('id', recurringJobId)
@@ -1424,7 +1429,7 @@ export const generateJobInstances = async (recurringJobId: string, untilDate?: s
     
     while (currentDate <= endDate && instanceCount < maxInstances) {
       // Check if instance already exists for this date
-      const { data: existingJob } = await supabase
+      const { data: existingJob } = await getSupabaseClient()
         .from('jobs')
         .select('id')
         .eq('recurring_job_id', recurringJobId)
@@ -1473,7 +1478,7 @@ export const generateJobInstances = async (recurringJobId: string, untilDate?: s
       
       for (let i = 0; i < instances.length; i += batchSize) {
         const batch = instances.slice(i, i + batchSize)
-        const { data, error: insertError } = await supabase
+        const { data, error: insertError } = await getSupabaseClient()
           .from('jobs')
           .insert(batch)
           .select()
@@ -1483,7 +1488,7 @@ export const generateJobInstances = async (recurringJobId: string, untilDate?: s
       }
       
       // Update last_generated_date
-      await supabase
+      await getSupabaseClient()
         .from('recurring_jobs')
         .update({ last_generated_date: new Date().toISOString() })
         .eq('id', recurringJobId)
@@ -1501,11 +1506,11 @@ export const generateJobInstances = async (recurringJobId: string, untilDate?: s
 // Generate future instances dynamically as needed (called from calendar view)
 export const ensureJobInstancesUpTo = async (recurringJobId: string, targetDate: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
     // Get the recurring job details
-    const { data: recurringJob, error: fetchError } = await supabase
+    const { data: recurringJob, error: fetchError } = await getSupabaseClient()
       .from('recurring_jobs')
       .select('*')
       .eq('id', recurringJobId)
@@ -1516,7 +1521,7 @@ export const ensureJobInstancesUpTo = async (recurringJobId: string, targetDate:
     if (!recurringJob) throw new Error('Recurring job not found')
 
     // Check if we have instances up to the target date
-    const { data: latestInstance } = await supabase
+    const { data: latestInstance } = await getSupabaseClient()
       .from('jobs')
       .select('scheduled_date')
       .eq('recurring_job_id', recurringJobId)
@@ -1543,10 +1548,10 @@ export const ensureJobInstancesUpTo = async (recurringJobId: string, targetDate:
 // Get recurring jobs for a specific client (just the template, not instances)
 export const getRecurringJobsForClient = async (clientId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('recurring_jobs')
       .select('*')
       .eq('client_id', clientId)
@@ -1564,10 +1569,10 @@ export const getRecurringJobsForClient = async (clientId: string) => {
 // AI Task Suggestions Functions
 export const saveTaskSuggestion = async (suggestion: any) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('task_suggestions')
       .insert([{
         user_id: user.id,
@@ -1604,11 +1609,11 @@ export const saveTaskSuggestion = async (suggestion: any) => {
 
 export const getTaskSuggestions = async (clientId?: string, status?: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
     // First try with relationships, fallback to basic query if relationships don't exist
-    let query = supabase
+    let query = getSupabaseClient()
       .from('task_suggestions')
       .select('*')
       .eq('user_id', user.id)
@@ -1645,7 +1650,7 @@ export const getTaskSuggestions = async (clientId?: string, status?: string) => 
 
 export const updateTaskSuggestionStatus = async (suggestionId: string, status: string, implementedTaskId?: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
     const updateData: any = {
@@ -1657,7 +1662,7 @@ export const updateTaskSuggestionStatus = async (suggestionId: string, status: s
       updateData.implemented_task_id = implementedTaskId
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('task_suggestions')
       .update(updateData)
       .eq('id', suggestionId)
@@ -1674,13 +1679,13 @@ export const updateTaskSuggestionStatus = async (suggestionId: string, status: s
 
 export const getClientTaskCompletionHistory = async (clientId: string, days: number = 90) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - days)
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('jobs')
       .select(`
         id,
@@ -1719,7 +1724,7 @@ export const getClientTaskCompletionHistory = async (clientId: string, days: num
 
 export const generateAITaskSuggestions = async (clientId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
     // This would call the AI suggestion engine
@@ -1735,10 +1740,10 @@ export const generateAITaskSuggestions = async (clientId: string) => {
 // Get job instances for a recurring job
 export const getRecurringJobInstances = async (recurringJobId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('jobs')
       .select('*, client:clients(name)')
       .eq('recurring_job_id', recurringJobId)
@@ -1763,12 +1768,12 @@ export const createSupply = async (supplyData: {
   unit: string
 }) => {
   // Get current user
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await getSupabaseClient().auth.getUser()
   if (!user) {
     throw new Error('User not authenticated')
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('supplies')
     .insert([{
       ...supplyData,
@@ -1788,7 +1793,7 @@ export const updateSupply = async (id: string, supplyData: Partial<{
   low_stock_threshold: number
   unit: string
 }>) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('supplies')
     .update(supplyData)
     .eq('id', id)
@@ -1800,7 +1805,7 @@ export const updateSupply = async (id: string, supplyData: Partial<{
 }
 
 export const deleteSupply = async (id: string) => {
-  const { error } = await supabase
+  const { error } = await getSupabaseClient()
     .from('supplies')
     .delete()
     .eq('id', id)
@@ -1819,7 +1824,7 @@ export const createBookingRequest = async (bookingData: {
   description?: string
   booking_token: string
 }) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('booking_requests')
     .insert([bookingData])
     .select()
@@ -1830,7 +1835,7 @@ export const createBookingRequest = async (bookingData: {
 }
 
 export const getBookingRequests = async () => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('booking_requests')
     .select('*')
     .order('created_at', { ascending: false })
@@ -1840,7 +1845,7 @@ export const getBookingRequests = async () => {
 }
 
 export const updateBookingRequest = async (id: string, status: 'pending' | 'confirmed' | 'rejected' | 'cancelled') => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('booking_requests')
     .update({ status })
     .eq('id', id)
@@ -1863,7 +1868,7 @@ export const createJobFromBookingRequest = async (bookingData: {
 }) => {
   try {
     // Get current user
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) {
       throw new Error('User not authenticated')
     }
@@ -1872,7 +1877,7 @@ export const createJobFromBookingRequest = async (bookingData: {
     let clientId: string
     
     // Check if client already exists
-    const { data: existingClient } = await supabase
+    const { data: existingClient } = await getSupabaseClient()
       .from('clients')
       .select('id')
       .eq('user_id', user.id)
@@ -1883,7 +1888,7 @@ export const createJobFromBookingRequest = async (bookingData: {
       clientId = existingClient.id
     } else {
       // Create new client
-      const { data: newClient, error: clientError } = await supabase
+      const { data: newClient, error: clientError } = await getSupabaseClient()
         .from('clients')
         .insert([{
           user_id: user.id,
@@ -1918,7 +1923,7 @@ export const createJobFromBookingRequest = async (bookingData: {
     const jobTitle = `Booking Request - ${bookingData.client_name}`
     const jobDescription = `Services: ${serviceTypesDisplay}\n${bookingData.description ? `Additional Details: ${bookingData.description}\n` : ''}Booking Token: ${bookingData.booking_token}`
 
-    const { data: job, error: jobError } = await supabase
+    const { data: job, error: jobError } = await getSupabaseClient()
       .from('jobs')
       .insert([{
         user_id: user.id,
@@ -1952,7 +1957,7 @@ export const createFeedback = async (feedbackData: {
   comment?: string
   feedback_token: string
 }) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('feedback')
     .insert([feedbackData])
     .select()
@@ -1963,7 +1968,7 @@ export const createFeedback = async (feedbackData: {
 }
 
 export const getFeedback = async () => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('feedback')
     .select(`
       *,
@@ -1985,7 +1990,7 @@ export const updateFeedback = async (id: string, feedbackData: {
   is_submitted: boolean
   submitted_at: string
 }) => {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('feedback')
     .update(feedbackData)
     .eq('id', id)
@@ -2010,7 +2015,7 @@ export const getServiceTypes = async () => {
     }
 
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       console.error('Authentication error in getServiceTypes:', userError)
       throw new Error(`Authentication error: ${userError.message}`)
@@ -2021,7 +2026,7 @@ export const getServiceTypes = async () => {
 
     console.log('Fetching service types for user:', user.id)
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('service_types')
       .select('*')
       .eq('user_id', user.id)
@@ -2051,7 +2056,7 @@ export const createServiceType = async (serviceTypeData: {
     }
 
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       console.error('Authentication error in createServiceType:', userError)
       throw new Error(`Authentication error: ${userError.message}`)
@@ -2063,7 +2068,7 @@ export const createServiceType = async (serviceTypeData: {
     console.log('Creating service type for user:', user.id)
     console.log('Service type data:', serviceTypeData)
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('service_types')
       .insert([{
         ...serviceTypeData,
@@ -2091,7 +2096,7 @@ export const updateServiceType = async (id: string, serviceTypeData: Partial<{
 }>) => {
   try {
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       throw new Error(`Authentication error: ${userError.message}`)
     }
@@ -2099,7 +2104,7 @@ export const updateServiceType = async (id: string, serviceTypeData: Partial<{
       throw new Error('User not authenticated')
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('service_types')
       .update(serviceTypeData)
       .eq('id', id)
@@ -2118,7 +2123,7 @@ export const updateServiceType = async (id: string, serviceTypeData: Partial<{
 export const deleteServiceType = async (id: string) => {
   try {
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       throw new Error(`Authentication error: ${userError.message}`)
     }
@@ -2126,7 +2131,7 @@ export const deleteServiceType = async (id: string) => {
       throw new Error('User not authenticated')
     }
 
-    const { error } = await supabase
+    const { error } = await getSupabaseClient()
       .from('service_types')
       .delete()
       .eq('id', id)
@@ -2147,7 +2152,7 @@ export const testDatabaseConnection = async () => {
     }
 
     // Test basic connection
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('clients')
       .select('count', { count: 'exact', head: true })
     
@@ -2171,7 +2176,7 @@ export const testServiceTypesTable = async () => {
     }
 
     // Test if service_types table exists and is accessible
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('service_types')
       .select('count', { count: 'exact', head: true })
     
@@ -2195,7 +2200,7 @@ export const testRecurringJobsTable = async () => {
     }
 
     // Test if recurring_jobs table exists and is accessible
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('recurring_jobs')
       .select('count', { count: 'exact', head: true })
     
@@ -2214,7 +2219,7 @@ export const testRecurringJobsTable = async () => {
 export const testUserProfilesTable = async () => {
   try {
     // Test if user_profiles table exists and is accessible
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('user_profiles')
       .select('count', { count: 'exact', head: true })
     
@@ -2232,7 +2237,7 @@ export const testUserProfilesTable = async () => {
 
 export const checkTableExists = async (tableName: string) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from(tableName)
       .select('count', { count: 'exact', head: true })
     
@@ -2280,7 +2285,7 @@ export const checkRequiredTables = async () => {
 export const getDashboardStats = async () => {
   try {
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       throw new Error(`Authentication error: ${userError.message}`)
     }
@@ -2294,10 +2299,10 @@ export const getDashboardStats = async () => {
       { count: totalClients },
       { count: totalReports }
     ] = await Promise.all([
-      supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-      supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'completed'),
-      supabase.from('clients').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-      supabase.from('reports').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
+      getSupabaseClient().from('jobs').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+      getSupabaseClient().from('jobs').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'completed'),
+      getSupabaseClient().from('clients').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+      getSupabaseClient().from('reports').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
     ])
 
     return {
@@ -2316,7 +2321,7 @@ export const getDashboardStats = async () => {
 export const getSupplies = async () => {
   try {
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const { data: { user }, error: userError } = await getSupabaseClient().auth.getUser()
     if (userError) {
       throw new Error(`Authentication error: ${userError.message}`)
     }
@@ -2324,7 +2329,7 @@ export const getSupplies = async () => {
       throw new Error('User not authenticated')
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('supplies')
       .select('*')
       .eq('user_id', user.id)
@@ -2347,12 +2352,12 @@ export const addTaskToFutureInstances = async (
   customWeeks?: number
 ) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
     // Get all future job instances for this recurring job
     const today = new Date().toISOString().split('T')[0]
-    const { data: futureJobs, error: jobsError } = await supabase
+    const { data: futureJobs, error: jobsError } = await getSupabaseClient()
       .from('jobs')
       .select('id, scheduled_date')
       .eq('recurring_job_id', recurringJobId)
@@ -2397,7 +2402,7 @@ export const addTaskToFutureInstances = async (
     }))
 
     if (tasksToCreate.length > 0) {
-      const { data, error: createError } = await supabase
+      const { data, error: createError } = await getSupabaseClient()
         .from('tasks')
         .insert(tasksToCreate)
         .select()
@@ -2434,10 +2439,10 @@ export const addRecurringJobNote = async (
   category: 'general' | 'maintenance' | 'client_preference' | 'access_instructions' | 'special_requirements' = 'general'
 ) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('recurring_job_notes')
       .insert([{
         user_id: user.id,
@@ -2459,10 +2464,10 @@ export const addRecurringJobNote = async (
 
 export const getRecurringJobNotes = async (recurringJobId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('recurring_job_notes')
       .select('*')
       .eq('recurring_job_id', recurringJobId)
@@ -2479,7 +2484,7 @@ export const getRecurringJobNotes = async (recurringJobId: string) => {
 
 export const updateRecurringJobNote = async (noteId: string, content: string, category?: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
     const updateData: any = { 
@@ -2488,7 +2493,7 @@ export const updateRecurringJobNote = async (noteId: string, content: string, ca
     }
     if (category) updateData.category = category
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('recurring_job_notes')
       .update(updateData)
       .eq('id', noteId)
@@ -2506,10 +2511,10 @@ export const updateRecurringJobNote = async (noteId: string, content: string, ca
 
 export const deleteRecurringJobNote = async (noteId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { error } = await supabase
+    const { error } = await getSupabaseClient()
       .from('recurring_job_notes')
       .delete()
       .eq('id', noteId)
@@ -2526,10 +2531,10 @@ export const deleteRecurringJobNote = async (noteId: string) => {
 // Job Worker Assignment operations
 export const getJobWorkerAssignments = async (jobId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('job_worker_assignments')
       .select(`
         *,
@@ -2560,10 +2565,10 @@ export const assignWorkerToJob = async (assignmentData: {
   assigned_hours?: number
 }) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('job_worker_assignments')
       .insert([{
         ...assignmentData,
@@ -2588,17 +2593,17 @@ export const assignWorkerToJob = async (assignmentData: {
 
 export const removeWorkerFromJob = async (assignmentId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
     // Get the assignment to get job_id for cost update
-    const { data: assignment } = await supabase
+    const { data: assignment } = await getSupabaseClient()
       .from('job_worker_assignments')
       .select('job_id')
       .eq('id', assignmentId)
       .single()
 
-    const { error } = await supabase
+    const { error } = await getSupabaseClient()
       .from('job_worker_assignments')
       .delete()
       .eq('id', assignmentId)
@@ -2619,10 +2624,10 @@ export const removeWorkerFromJob = async (assignmentId: string) => {
 
 export const clockInWorker = async (assignmentId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('job_worker_assignments')
       .update({
         clock_in_time: new Date().toISOString(),
@@ -2643,11 +2648,11 @@ export const clockInWorker = async (assignmentId: string) => {
 
 export const clockOutWorker = async (assignmentId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
     // First get the current assignment data
-    const { data: assignment, error: getError } = await supabase
+    const { data: assignment, error: getError } = await getSupabaseClient()
       .from('job_worker_assignments')
       .select('*')
       .eq('id', assignmentId)
@@ -2662,7 +2667,7 @@ export const clockOutWorker = async (assignmentId: string) => {
     const totalCost = hoursWorked * assignment.hourly_rate
     const newActualHours = (assignment.actual_hours || 0) + hoursWorked
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('job_worker_assignments')
       .update({
         clock_out_time: clockOutTime,
@@ -2689,7 +2694,7 @@ export const clockOutWorker = async (assignmentId: string) => {
 
 export const updateJobEstimatedCost = async (jobId: string) => {
   try {
-    const { data: assignments, error } = await supabase
+    const { data: assignments, error } = await getSupabaseClient()
       .from('job_worker_assignments')
       .select('hourly_rate, assigned_hours')
       .eq('job_id', jobId)
@@ -2700,7 +2705,7 @@ export const updateJobEstimatedCost = async (jobId: string) => {
       return total + (assignment.hourly_rate * (assignment.assigned_hours || 0))
     }, 0) || 0
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await getSupabaseClient()
       .from('jobs')
       .update({ estimated_cost: estimatedCost })
       .eq('id', jobId)
@@ -2715,7 +2720,7 @@ export const updateJobEstimatedCost = async (jobId: string) => {
 
 export const updateJobCosts = async (jobId: string) => {
   try {
-    const { data: assignments, error } = await supabase
+    const { data: assignments, error } = await getSupabaseClient()
       .from('job_worker_assignments')
       .select('hourly_rate, assigned_hours, actual_hours, total_cost')
       .eq('job_id', jobId)
@@ -2730,7 +2735,7 @@ export const updateJobCosts = async (jobId: string) => {
       return total + (assignment.total_cost || 0)
     }, 0) || 0
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await getSupabaseClient()
       .from('jobs')
       .update({ 
         estimated_cost: estimatedCost,
@@ -2749,10 +2754,10 @@ export const updateJobCosts = async (jobId: string) => {
 // User Profile operations for hourly rate
 export const updateUserHourlyRate = async (hourlyRate: number) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('user_profiles')
       .update({ hourly_rate: hourlyRate })
       .eq('user_id', user.id)
@@ -2774,10 +2779,10 @@ export const getUserHourlyRate = async () => {
       return 0
     }
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getSupabaseClient().auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseClient()
       .from('user_profiles')
       .select('hourly_rate')
       .eq('user_id', user.id)

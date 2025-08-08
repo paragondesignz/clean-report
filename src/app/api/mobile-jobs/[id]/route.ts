@@ -15,9 +15,34 @@ export async function GET(
         { status: 400 }
       )
     }
+    
+    // Get access code from headers or query params
+    const searchParams = request.nextUrl.searchParams
+    const accessCode = searchParams.get('access') || request.headers.get('x-access-code')
+    
+    if (!accessCode) {
+      return NextResponse.json(
+        { error: 'Access code is required' },
+        { status: 401 }
+      )
+    }
 
     // Create service client for admin-level access
     const supabase = createServiceClient()
+    
+    // Verify the access code
+    const { data: userProfile, error: authError } = await supabase
+      .from('user_profiles')
+      .select('user_id')
+      .eq('mobile_access_code', accessCode)
+      .single()
+    
+    if (authError || !userProfile) {
+      return NextResponse.json(
+        { error: 'Invalid access code' },
+        { status: 401 }
+      )
+    }
     
     // Get specific job with all related data
     const { data: job, error } = await supabase
@@ -50,6 +75,7 @@ export async function GET(
         )
       `)
       .eq('id', jobId)
+      .eq('user_id', userProfile.user_id)
       .single()
 
     if (error) {
@@ -100,15 +126,41 @@ export async function PATCH(
         { status: 400 }
       )
     }
+    
+    // Get access code from headers or query params
+    const searchParams = request.nextUrl.searchParams
+    const accessCode = searchParams.get('access') || request.headers.get('x-access-code')
+    
+    if (!accessCode) {
+      return NextResponse.json(
+        { error: 'Access code is required' },
+        { status: 401 }
+      )
+    }
 
     // Create service client for admin-level access
     const supabase = createServiceClient()
     
-    // Update job
+    // Verify the access code
+    const { data: userProfile, error: authError } = await supabase
+      .from('user_profiles')
+      .select('user_id')
+      .eq('mobile_access_code', accessCode)
+      .single()
+    
+    if (authError || !userProfile) {
+      return NextResponse.json(
+        { error: 'Invalid access code' },
+        { status: 401 }
+      )
+    }
+    
+    // Update job (only for authenticated user's jobs)
     const { data, error } = await supabase
       .from('jobs')
       .update(updates)
       .eq('id', jobId)
+      .eq('user_id', userProfile.user_id)
       .select()
       .single()
 

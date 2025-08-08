@@ -129,6 +129,7 @@ export default function AnalyticsPage() {
     : 0
 
   const activeJobs = data.jobs.filter(j => j.status === 'in_progress').length
+  const scheduledJobs = data.jobs.filter(j => j.status === 'scheduled').length
 
   // Time-based metrics (filtered by timeRange)
   const cutoffDate = new Date()
@@ -223,7 +224,7 @@ export default function AnalyticsPage() {
     {
       title: "Supply Items",
       value: data.supplies.length,
-      change: data.supplies.filter(s => (s.quantity || 0) < (s.minimum_quantity || 10)).length + " low stock",
+      change: data.supplies.filter(s => (s.current_stock || 0) < (s.low_stock_threshold || 10)).length + " low stock",
       changeType: "neutral",
       icon: Package,
       description: "Items in inventory"
@@ -376,8 +377,8 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {data.supplies.slice(0, 6).map((supply) => {
-              const quantity = supply.quantity || 0
-              const minQuantity = supply.minimum_quantity || 10
+              const quantity = supply.current_stock || 0
+              const minQuantity = supply.low_stock_threshold || 10
               const isLowStock = quantity < minQuantity
               
               return (
@@ -498,8 +499,8 @@ export default function AnalyticsPage() {
                 <h4 className="font-medium">Supply Management</h4>
               </div>
               <p className="text-sm text-muted-foreground">
-                {data.supplies.filter(s => (s.quantity || 0) < (s.minimum_quantity || 10)).length > 0
-                  ? `${data.supplies.filter(s => (s.quantity || 0) < (s.minimum_quantity || 10)).length} items are running low. Consider restocking soon.`
+                {data.supplies.filter(s => (s.current_stock || 0) < (s.low_stock_threshold || 10)).length > 0
+                  ? `${data.supplies.filter(s => (s.current_stock || 0) < (s.low_stock_threshold || 10)).length} items are running low. Consider restocking soon.`
                   : 'All supplies are well-stocked. Good inventory management!'
                 }
               </p>

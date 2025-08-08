@@ -267,7 +267,7 @@ export default function JobsPage() {
               <Button variant="outline" onClick={() => window.open('/DATABASE_SETUP.md', '_blank')}>
                 View Setup Instructions
               </Button>
-              <Button onClick={fetchData}>
+              <Button onClick={fetchInitialData}>
                 Retry Connection
               </Button>
             </div>
