@@ -832,20 +832,24 @@ export default function ClientDetailsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
+      <div className="space-y-4">
+        {/* Back button */}
+        <div>
           <Button variant="ghost" onClick={() => handleNavigation("/clients")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Clients
           </Button>
+        </div>
+        
+        {/* Title and action buttons */}
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">
               {isEditing ? "Edit Client" : client.name}
             </h1>
             <p className="text-slate-600">Client Details</p>
           </div>
-        </div>
-        <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2">
           {isEditing ? (
             <>
               <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700">
@@ -890,6 +894,7 @@ export default function ClientDetailsPage() {
               </Dialog>
             </>
           )}
+          </div>
         </div>
       </div>
 
