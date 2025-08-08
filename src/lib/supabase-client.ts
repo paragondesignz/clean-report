@@ -1557,7 +1557,7 @@ export const saveTaskSuggestion = async (suggestion: any) => {
 
     if (error) {
       // If task_suggestions table doesn't exist or has issues, log and return mock data
-      if (error.code === 'PGRST200' || error.message.includes('schema cache') || error.message.includes('task_suggestions')) {
+      if (error.code === 'PGRST200' || error.code === '42P01' || error.message.includes('schema cache') || error.message.includes('task_suggestions') || error.message.includes('does not exist')) {
         console.warn('Task suggestions table not available, returning mock suggestion')
         return { ...suggestion, id: `mock_${Date.now()}`, created_at: new Date().toISOString() }
       }
@@ -1567,7 +1567,7 @@ export const saveTaskSuggestion = async (suggestion: any) => {
   } catch (error) {
     console.error('Error saving task suggestion:', error)
     // Return mock data to prevent component crash
-    if (error instanceof Error && (error.message.includes('schema cache') || error.message.includes('task_suggestions'))) {
+    if (error instanceof Error && (error.message.includes('schema cache') || error.message.includes('task_suggestions') || error.message.includes('does not exist'))) {
       return { ...suggestion, id: `mock_${Date.now()}`, created_at: new Date().toISOString() }
     }
     throw error
@@ -1598,7 +1598,7 @@ export const getTaskSuggestions = async (clientId?: string, status?: string) => 
 
     // If the table doesn't exist or has schema issues, return empty array
     if (error) {
-      if (error.code === 'PGRST200' || error.message.includes('schema cache') || error.message.includes('relationship')) {
+      if (error.code === 'PGRST200' || error.code === '42P01' || error.message.includes('schema cache') || error.message.includes('relationship') || error.message.includes('does not exist')) {
         console.warn('Task suggestions table not properly configured, returning empty results')
         return []
       }
@@ -1608,7 +1608,7 @@ export const getTaskSuggestions = async (clientId?: string, status?: string) => 
   } catch (error) {
     console.error('Error fetching task suggestions:', error)
     // Return empty array instead of throwing to prevent page crash
-    if (error instanceof Error && (error.message.includes('schema cache') || error.message.includes('relationship'))) {
+    if (error instanceof Error && (error.message.includes('schema cache') || error.message.includes('relationship') || error.message.includes('does not exist'))) {
       return []
     }
     throw error
