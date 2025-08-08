@@ -369,17 +369,30 @@ export default function ClientDetailsPage() {
         const clientJobs = jobsData || []
         const recurringJobs = recurringJobsData || []
         
-        const totalJobs = clientJobs.length
+        // Separate one-time jobs from recurring job instances
+        const oneTimeJobs = clientJobs.filter(job => !job.recurring_job_id)
+        const recurringJobInstances = clientJobs.filter(job => job.recurring_job_id)
+        
+        const totalOneTimeJobs = oneTimeJobs.length
+        const totalRecurringJobs = recurringJobs.length // This is the count of recurring job patterns, not instances
         const completedJobs = clientJobs.filter(job => job.status === 'completed').length
         const upcomingJobs = clientJobs.filter(job => ['scheduled', 'in_progress'].includes(job.status)).length
-        const totalRecurringJobs = recurringJobs.length
         
         // Calculate completion rate
+        const totalJobs = clientJobs.length
         const completionRate = totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 0
         
-        // Calculate total revenue (assuming a fixed rate per job for now)
+        // Calculate monthly revenue (current month only)
+        const currentMonth = new Date().getMonth()
+        const currentYear = new Date().getFullYear()
+        const thisMonthJobs = clientJobs.filter(job => {
+          const jobDate = new Date(job.scheduled_date)
+          return jobDate.getMonth() === currentMonth && 
+                 jobDate.getFullYear() === currentYear &&
+                 job.status === 'completed'
+        })
         const revenuePerJob = 150 // This could be configurable or job-specific
-        const totalRevenue = completedJobs * revenuePerJob
+        const monthlyRevenue = thisMonthJobs.length * revenuePerJob
         
         // Calculate average task completion from history
         const avgTaskCompletion = completionHistoryData.length > 0 
@@ -400,9 +413,9 @@ export default function ClientDetailsPage() {
         
         const clientWithStats: ClientWithDetails = {
           ...clientData,
-          totalJobs,
+          totalJobs: totalOneTimeJobs, // Only count one-time jobs here
           completedJobs,
-          totalRevenue,
+          totalRevenue: monthlyRevenue, // Monthly revenue instead of total
           upcomingJobs,
           totalRecurringJobs,
           completionRate,
@@ -849,10 +862,10 @@ export default function ClientDetailsPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-600">Total Jobs</p>
+                <p className="text-sm font-medium text-blue-600">Jobs</p>
                 <p className="text-2xl font-bold text-blue-900">{client.totalJobs || 0}</p>
                 <p className="text-xs text-blue-700 mt-1">
-                  {client.upcomingJobs || 0} upcoming
+                  {client.totalRecurringJobs || 0} recurring patterns
                 </p>
               </div>
               <Briefcase className="h-8 w-8 text-blue-600" />
@@ -879,10 +892,10 @@ export default function ClientDetailsPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-purple-600">Revenue</p>
+                <p className="text-sm font-medium text-purple-600">Revenue This Month</p>
                 <p className="text-2xl font-bold text-purple-900">${(client.totalRevenue || 0).toLocaleString()}</p>
                 <p className="text-xs text-purple-700 mt-1">
-                  {client.totalRecurringJobs || 0} recurring jobs
+                  {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
                 </p>
               </div>
               <DollarSign className="h-8 w-8 text-purple-600" />
@@ -1156,29 +1169,6 @@ export default function ClientDetailsPage() {
 
         {/* Sidebar - removed duplicate Notes section */}
         <div className="space-y-6">
-          {/* Client Stats */}
-          <Card className="border-slate-200">
-            <CardHeader>
-              <CardTitle className="text-slate-900">Client Statistics</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-4 bg-blue-50 rounded-xl">
-                  <p className="text-2xl font-bold text-blue-600">{client.totalJobs || 0}</p>
-                  <p className="text-sm text-slate-600">Total Jobs</p>
-                </div>
-                <div className="text-center p-4 bg-green-50 rounded-xl">
-                  <p className="text-2xl font-bold text-green-600">{client.completedJobs || 0}</p>
-                  <p className="text-sm text-slate-600">Completed</p>
-                </div>
-              </div>
-              <div className="text-center p-4 bg-purple-50 rounded-xl">
-                <p className="text-2xl font-bold text-purple-600">${client.totalRevenue || 0}</p>
-                <p className="text-sm text-slate-600">Total Revenue</p>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Client Details */}
           <Card className="border-slate-200">
             <CardHeader>
