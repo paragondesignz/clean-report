@@ -30,7 +30,8 @@ import {
   getClientInfo,
   getClientJobs,
   getClientJobStats,
-  getClientFeedback
+  getClientFeedback,
+  getClientReports
 } from "@/lib/customer-portal-client"
 import type { Client, JobWithClient } from "@/types/database"
 import { CustomerPortalChat } from "@/components/customer-portal/customer-portal-chat"
@@ -43,6 +44,7 @@ export default function CustomerPortalDashboard() {
   const [jobs, setJobs] = useState<JobWithClient[]>([])
   const [stats, setStats] = useState<any>(null)
   const [feedback, setFeedback] = useState<any[]>([])
+  const [reports, setReports] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState("dashboard")
 
   useEffect(() => {
@@ -87,6 +89,10 @@ export default function CustomerPortalDashboard() {
       // Load feedback
       const feedbackData = await getClientFeedback(session.client_id)
       setFeedback(feedbackData)
+
+      // Load reports
+      const reportsData = await getClientReports(session.client_id, { limit: 20 })
+      setReports(reportsData)
 
     } catch (error) {
       console.error('Error loading dashboard data:', error)
@@ -163,9 +169,10 @@ export default function CustomerPortalDashboard() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="jobs">My Jobs</TabsTrigger>
+            <TabsTrigger value="reports">Reports</TabsTrigger>
             <TabsTrigger value="support">Support</TabsTrigger>
             <TabsTrigger value="faq">FAQ</TabsTrigger>
           </TabsList>
@@ -361,6 +368,155 @@ export default function CustomerPortalDashboard() {
                     ))}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Reports Tab */}
+          <TabsContent value="reports" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Job Reports</CardTitle>
+                <CardDescription>View and download completed job reports</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {reports.length === 0 ? (
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No reports available</h3>
+                    <p className="text-gray-500">Job reports will appear here once your cleaning jobs are completed.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {reports.map((report: any) => (
+                      <div key={report.id} className="border rounded-lg p-6 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h4 className="font-semibold text-gray-900">{report.job?.title}</h4>
+                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Completed
+                              </Badge>
+                            </div>
+                            {report.job?.description && (
+                              <p className="text-gray-600 mb-3">{report.job.description}</p>
+                            )}
+                            <div className="flex items-center gap-4 text-sm text-gray-500">
+                              <div className="flex items-center gap-1">
+                                <Calendar className="h-4 w-4" />
+                                Job Date: {new Date(report.job?.scheduled_date).toLocaleDateString()}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <FileText className="h-4 w-4" />
+                                Report Generated: {new Date(report.created_at).toLocaleDateString()}
+                              </div>
+                              {report.email_sent && (
+                                <div className="flex items-center gap-1">
+                                  <Mail className="h-4 w-4" />
+                                  Email Sent: {new Date(report.sent_at).toLocaleDateString()}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-gray-500">
+                            <p>Report ID: {report.id.slice(0, 8)}...</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {report.report_url && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  window.open(report.report_url, '_blank', 'noopener,noreferrer')
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <FileText className="h-4 w-4" />
+                                View Report
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Additional Report Info */}
+                        <div className="mt-4 pt-4 border-t bg-gray-50 rounded-lg p-4">
+                          <h5 className="font-medium text-gray-900 mb-2">Report Summary</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <p className="text-gray-600">Service Date</p>
+                              <p className="font-medium">{new Date(report.job?.scheduled_date).toLocaleDateString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Report Status</p>
+                              <p className="font-medium">{report.email_sent ? 'Delivered' : 'Generated'}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Client</p>
+                              <p className="font-medium">{report.job?.client?.name}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-3 flex items-center gap-2 text-sm text-blue-600">
+                            <Star className="h-4 w-4" />
+                            <span>Professional cleaning report with photos and task completion details</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Reports Info Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>About Your Reports</CardTitle>
+                <CardDescription>Understanding your cleaning service reports</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="text-sm">Before & after photos included</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="text-sm">Detailed task completion checklist</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="text-sm">Time tracking and service duration</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="text-sm">Professional branded presentation</span>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="text-sm">Service notes and observations</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="text-sm">Quality assurance confirmation</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="text-sm">Downloadable PDF format</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="text-sm">Permanent access to all reports</span>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

@@ -187,6 +187,58 @@ export async function getClientJobStats(clientId: string) {
   }
 }
 
+// Get client's job reports
+export async function getClientReports(
+  clientId: string, 
+  options: {
+    limit?: number
+    offset?: number
+  } = {}
+) {
+  try {
+    let query = supabase
+      .from('reports')
+      .select(`
+        *,
+        job:jobs!inner(
+          id,
+          title,
+          description,
+          scheduled_date,
+          status,
+          client_id,
+          client:clients(
+            id,
+            name,
+            email
+          )
+        )
+      `)
+      .eq('job.client_id', clientId)
+      .order('created_at', { ascending: false })
+
+    // Apply pagination
+    if (options.limit) {
+      query = query.limit(options.limit)
+    }
+    if (options.offset) {
+      query = query.range(options.offset, options.offset + (options.limit || 10) - 1)
+    }
+
+    const { data: reports, error } = await query
+
+    if (error) {
+      console.error('Error fetching client reports:', error)
+      return []
+    }
+
+    return reports || []
+  } catch (error) {
+    console.error('Error fetching client reports:', error)
+    return []
+  }
+}
+
 // Get recent client feedback
 export async function getClientFeedback(clientId: string, limit = 5) {
   try {
