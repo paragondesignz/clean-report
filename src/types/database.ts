@@ -49,6 +49,9 @@ export interface Database {
           timer_started_at: string | null
           timer_ended_at: string | null
           total_time_seconds: number
+          agreed_hours: number | null
+          estimated_cost: number | null
+          actual_cost: number | null
           created_at: string
           updated_at: string
         }
@@ -67,6 +70,9 @@ export interface Database {
           timer_started_at?: string | null
           timer_ended_at?: string | null
           total_time_seconds?: number
+          agreed_hours?: number | null
+          estimated_cost?: number | null
+          actual_cost?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -85,6 +91,9 @@ export interface Database {
           timer_started_at?: string | null
           timer_ended_at?: string | null
           total_time_seconds?: number
+          agreed_hours?: number | null
+          estimated_cost?: number | null
+          actual_cost?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -392,6 +401,7 @@ export interface Database {
           website_url: string
           subscription_tier: 'free' | 'pro'
           mobile_portal_password: string | null
+          hourly_rate: number
           created_at: string
           updated_at: string
         }
@@ -408,6 +418,7 @@ export interface Database {
           website_url?: string
           subscription_tier?: 'free' | 'pro'
           mobile_portal_password?: string | null
+          hourly_rate?: number
           created_at?: string
           updated_at?: string
         }
@@ -424,6 +435,7 @@ export interface Database {
           website_url?: string
           subscription_tier?: 'free' | 'pro'
           mobile_portal_password?: string | null
+          hourly_rate?: number
           created_at?: string
           updated_at?: string
         }
@@ -442,6 +454,8 @@ export interface Database {
           scheduled_time: string
           is_active: boolean
           last_generated_date: string
+          agreed_hours: number | null
+          estimated_cost: number | null
           created_at: string
           updated_at: string
         }
@@ -457,6 +471,8 @@ export interface Database {
           scheduled_time: string
           is_active?: boolean
           last_generated_date?: string
+          agreed_hours?: number | null
+          estimated_cost?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -472,6 +488,8 @@ export interface Database {
           scheduled_time?: string
           is_active?: boolean
           last_generated_date?: string
+          agreed_hours?: number | null
+          estimated_cost?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -1224,6 +1242,53 @@ export interface Database {
           created_at?: string
         }
       }
+      job_worker_assignments: {
+        Row: {
+          id: string
+          job_id: string
+          worker_id: string
+          worker_type: 'owner' | 'sub_contractor'
+          hourly_rate: number
+          assigned_hours: number | null
+          actual_hours: number | null
+          clock_in_time: string | null
+          clock_out_time: string | null
+          is_clocked_in: boolean
+          total_cost: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          job_id: string
+          worker_id: string
+          worker_type: 'owner' | 'sub_contractor'
+          hourly_rate: number
+          assigned_hours?: number | null
+          actual_hours?: number | null
+          clock_in_time?: string | null
+          clock_out_time?: string | null
+          is_clocked_in?: boolean
+          total_cost?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          job_id?: string
+          worker_id?: string
+          worker_type?: 'owner' | 'sub_contractor'
+          hourly_rate?: number
+          assigned_hours?: number | null
+          actual_hours?: number | null
+          clock_in_time?: string | null
+          clock_out_time?: string | null
+          is_clocked_in?: boolean
+          total_cost?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
   }
 }
@@ -1263,7 +1328,8 @@ export type StripeConnectAccount = Database['public']['Tables']['stripe_connect_
 export type PaymentMethod = Database['public']['Tables']['payment_methods']['Row']
 export type FinancialTransaction = Database['public']['Tables']['financial_transactions']['Row']
 export type InvoiceTemplate = Database['public']['Tables']['invoice_templates']['Row']
-export type TaxRate = Database['public']['Tables']['tax_rates']['Row'] 
+export type TaxRate = Database['public']['Tables']['tax_rates']['Row']
+export type JobWorkerAssignment = Database['public']['Tables']['job_worker_assignments']['Row']
 
 // Extended types with relationships
 export interface JobWithClient extends Job {

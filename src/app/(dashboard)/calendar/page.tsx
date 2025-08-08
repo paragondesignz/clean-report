@@ -17,11 +17,16 @@ import {
   RefreshCw,
   Settings,
   ArrowRight,
-  X
+  X,
+  Grid3X3,
+  Calendar,
+  CalendarDays
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import type { Job, Client, CalendarIntegration, JobWithClient } from "@/types/database"
+import type { CalendarIntegration } from "@/types/database"
+import type { CalendarEvent } from "@/types/calendar"
+import { WeekView, MonthView, YearView } from "@/components/calendar/calendar-views"
 import { 
   syncJobsWithGoogleCalendar,
   parseGoogleCalendarUrl,
@@ -30,20 +35,8 @@ import {
 } from "@/lib/google-calendar"
 import { getJobsForDateRange, getCalendarIntegration, getClients } from "@/lib/supabase-client"
 
-interface CalendarEvent {
-  id: string
-  title: string
-  date: string
-  time: string
-  status: string
-  client?: Client
-  type: 'job' | 'appointment'
-  isRecurring?: boolean
-  recurringJobId?: string
-}
-
 export default function CalendarPage() {
-  const { user } = useAuth()
+  const {} = useAuth()
   const { toast } = useToast()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -53,21 +46,44 @@ export default function CalendarPage() {
   const [calendarIntegration, setCalendarIntegration] = useState<CalendarIntegration | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [highlightedRecurringJob, setHighlightedRecurringJob] = useState<string | null>(null)
+  const [viewType, setViewType] = useState<'week' | 'month' | 'year'>('month')
 
   const loadCalendarData = useCallback(async () => {
     setLoading(true)
     try {
-      // Calculate date range for current month + previous/next months for better UX
-      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
-      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 2, 0)
+      // Calculate date range based on view type
+      let startDate: string, endDate: string
       
-      const startDate = startOfMonth.toISOString().split('T')[0]
-      const endDate = endOfMonth.toISOString().split('T')[0]
+      switch (viewType) {
+        case 'week':
+          // Get current week
+          const startOfWeek = new Date(currentDate)
+          startOfWeek.setDate(currentDate.getDate() - currentDate.getDay())
+          const endOfWeek = new Date(startOfWeek)
+          endOfWeek.setDate(startOfWeek.getDate() + 6)
+          startDate = startOfWeek.toISOString().split('T')[0]
+          endDate = endOfWeek.toISOString().split('T')[0]
+          break
+        case 'year':
+          // Get current year
+          const startOfYear = new Date(currentDate.getFullYear(), 0, 1)
+          const endOfYear = new Date(currentDate.getFullYear(), 11, 31)
+          startDate = startOfYear.toISOString().split('T')[0]
+          endDate = endOfYear.toISOString().split('T')[0]
+          break
+        default: // month
+          // Calculate date range for current month + previous/next months for better UX
+          const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
+          const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 2, 0)
+          startDate = startOfMonth.toISOString().split('T')[0]
+          endDate = endOfMonth.toISOString().split('T')[0]
+          break
+      }
       
       // Fetch jobs from Supabase for the date range (includes recurring job instances)
       const jobsData = await getJobsForDateRange(startDate, endDate)
       if (jobsData) {
-        const calendarEvents: CalendarEvent[] = jobsData.map((job: any) => ({
+        const calendarEvents: CalendarEvent[] = jobsData.map((job) => ({
           id: job.id,
           title: job.recurring_job_id ? `${job.title} (Recurring)` : job.title,
           date: job.scheduled_date,
@@ -100,15 +116,24 @@ export default function CalendarPage() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [currentDate, viewType, toast])
 
   useEffect(() => {
     loadCalendarData()
-  }, [currentDate, loadCalendarData])
+  }, [currentDate, viewType, loadCalendarData])
 
-  // Handle recurring job highlighting from query params
+  // Handle recurring job highlighting and date navigation from query params
   useEffect(() => {
     const recurringId = searchParams.get('recurring')
+    const dateParam = searchParams.get('date')
+    
+    if (dateParam) {
+      const targetDate = new Date(dateParam)
+      if (!isNaN(targetDate.getTime())) {
+        setCurrentDate(targetDate)
+      }
+    }
+    
     if (recurringId) {
       setHighlightedRecurringJob(recurringId)
       
@@ -142,7 +167,9 @@ export default function CalendarPage() {
             
             if (isAuthenticated) {
               // Get actual jobs and clients from Supabase
-              const jobsData = await getJobs()
+              const startDate = new Date().toISOString().split('T')[0]
+              const endDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 1 year ahead
+              const jobsData = await getJobsForDateRange(startDate, endDate)
               const clientsData = await getClients()
               
               if (jobsData && clientsData) {
@@ -194,33 +221,6 @@ export default function CalendarPage() {
     }
   }
 
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear()
-    const month = date.getMonth()
-    const firstDay = new Date(year, month, 1)
-    const lastDay = new Date(year, month + 1, 0)
-    const daysInMonth = lastDay.getDate()
-    const startingDayOfWeek = firstDay.getDay()
-    
-    const days = []
-    
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null)
-    }
-    
-    // Add all days of the month
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(new Date(year, month, i))
-    }
-    
-    return days
-  }
-
-  const getEventsForDate = (date: Date) => {
-    const dateString = date.toISOString().split('T')[0]
-    return events.filter(event => event.date === dateString)
-  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -247,12 +247,52 @@ export default function CalendarPage() {
 
   const handleEventClick = (event: CalendarEvent) => {
     if (event.type === 'job') {
-      router.push(`/jobs/${event.id}`)
+      if (event.id === 'month-nav') {
+        // Handle month navigation in year view
+        const targetDate = new Date(event.date)
+        setCurrentDate(targetDate)
+        setViewType('month')
+      } else {
+        router.push(`/jobs/${event.id}`)
+      }
     }
   }
 
-  const days = getDaysInMonth(currentDate)
-  const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+  // Navigation functions for different view types
+  const navigateDate = (direction: 'prev' | 'next') => {
+    const newDate = new Date(currentDate)
+    
+    switch (viewType) {
+      case 'week':
+        newDate.setDate(currentDate.getDate() + (direction === 'next' ? 7 : -7))
+        break
+      case 'year':
+        newDate.setFullYear(currentDate.getFullYear() + (direction === 'next' ? 1 : -1))
+        break
+      default: // month
+        newDate.setMonth(currentDate.getMonth() + (direction === 'next' ? 1 : -1))
+        newDate.setDate(1)
+        break
+    }
+    
+    setCurrentDate(newDate)
+  }
+
+  const getDisplayTitle = () => {
+    switch (viewType) {
+      case 'week':
+        const startOfWeek = new Date(currentDate)
+        startOfWeek.setDate(currentDate.getDate() - currentDate.getDay())
+        const endOfWeek = new Date(startOfWeek)
+        endOfWeek.setDate(startOfWeek.getDate() + 6)
+        return `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+      case 'year':
+        return currentDate.getFullYear().toString()
+      default: // month
+        return currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    }
+  }
 
   if (loading) {
     return (
@@ -354,82 +394,85 @@ export default function CalendarPage() {
         </Card>
       )}
 
-      {/* Calendar Navigation */}
+      {/* Calendar Navigation and View Controls */}
       <div className="flex items-center justify-between">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <h2 className="text-xl font-semibold">{monthName}</h2>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigateDate('prev')}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <h2 className="text-xl font-semibold min-w-[200px] text-center">{getDisplayTitle()}</h2>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigateDate('next')}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+        
+        {/* View Type Controls */}
+        <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
+          <Button
+            variant={viewType === 'week' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setViewType('week')}
+            className="h-8"
+          >
+            <CalendarDays className="h-4 w-4 mr-1" />
+            Week
+          </Button>
+          <Button
+            variant={viewType === 'month' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setViewType('month')}
+            className="h-8"
+          >
+            <Calendar className="h-4 w-4 mr-1" />
+            Month
+          </Button>
+          <Button
+            variant={viewType === 'year' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setViewType('year')}
+            className="h-8"
+          >
+            <Grid3X3 className="h-4 w-4 mr-1" />
+            Year
+          </Button>
+        </div>
       </div>
 
-      {/* Calendar Grid */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="grid grid-cols-7 gap-px bg-gray-200">
-            {/* Day headers */}
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-              <div key={day} className="bg-white p-3 text-center font-medium text-gray-500">
-                {day}
-              </div>
-            ))}
-            
-            {/* Calendar days */}
-            {days.map((day, index) => (
-              <div
-                key={index}
-                className={`bg-white min-h-[120px] p-2 ${
-                  day ? 'hover:bg-gray-50' : ''
-                }`}
-              >
-                {day && (
-                  <>
-                    <div className="text-sm font-medium mb-1">
-                      {day.getDate()}
-                    </div>
-                    <div className="space-y-1">
-                      {getEventsForDate(day).map(event => (
-                        <div
-                          key={event.id}
-                          className={`text-xs p-1 rounded cursor-pointer hover:bg-blue-50 transition-colors ${
-                            highlightedRecurringJob && event.recurringJobId === highlightedRecurringJob 
-                              ? 'bg-blue-100 border-l-4 border-l-blue-600 ring-1 ring-blue-200' 
-                              : event.isRecurring 
-                                ? 'border-l-2 border-l-purple-400' 
-                                : ''
-                          }`}
-                          title={`${event.title} - ${formatTime(event.time)} ${event.isRecurring ? '(Recurring Job Instance)' : ''}`}
-                          onClick={() => handleEventClick(event)}
-                        >
-                          <div className="flex items-center space-x-1">
-                            <Clock className="h-3 w-3 text-gray-400" />
-                            <span className="truncate">{formatTime(event.time)}</span>
-                            {event.isRecurring && <RefreshCw className="h-3 w-3 text-purple-600" />}
-                          </div>
-                          <div className="truncate font-medium">{event.title}</div>
-                          <Badge className={`text-xs ${getStatusColor(event.status)}`}>
-                            {event.status.replace('_', ' ')}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Calendar Views */}
+      {viewType === 'week' && (
+        <WeekView 
+          currentDate={currentDate}
+          events={events}
+          highlightedRecurringJob={highlightedRecurringJob}
+          onEventClick={handleEventClick}
+        />
+      )}
+      
+      {viewType === 'month' && (
+        <MonthView 
+          currentDate={currentDate}
+          events={events}
+          highlightedRecurringJob={highlightedRecurringJob}
+          onEventClick={handleEventClick}
+        />
+      )}
+      
+      {viewType === 'year' && (
+        <YearView 
+          currentDate={currentDate}
+          events={events}
+          highlightedRecurringJob={highlightedRecurringJob}
+          onEventClick={handleEventClick}
+        />
+      )}
 
       {/* Upcoming Events */}
       <Card>

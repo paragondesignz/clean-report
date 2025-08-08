@@ -48,6 +48,7 @@ export function AccountSettings() {
     contact_email: "",
     contact_phone: "",
     website_url: "",
+    hourly_rate: 0,
     created_at: "",
     updated_at: ""
   })
@@ -255,6 +256,22 @@ export function AccountSettings() {
                 onChange={(e) => setProfile(prev => ({ ...prev, contact_phone: e.target.value }))}
                 placeholder="+1 (555) 123-4567"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="hourly_rate">Your Hourly Rate ($/hour)</Label>
+              <Input
+                id="hourly_rate"
+                type="number"
+                step="0.50"
+                min="0"
+                value={profile.hourly_rate}
+                onChange={(e) => setProfile(prev => ({ ...prev, hourly_rate: parseFloat(e.target.value) || 0 }))}
+                placeholder="25.00"
+              />
+              <p className="text-sm text-muted-foreground">
+                This rate will be used when you assign yourself to jobs for time tracking.
+              </p>
             </div>
             
             <div className="space-y-2">

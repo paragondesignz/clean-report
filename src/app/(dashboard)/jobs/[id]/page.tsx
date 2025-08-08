@@ -71,6 +71,10 @@ import { JobSubContractorAssignment } from "@/components/job-sub-contractor-assi
 import { RecurringJobDeleteDialog } from "@/components/recurring-job-delete-dialog"
 import { RecurringTaskDialog } from "@/components/recurring-task-dialog"
 import { JobNotes } from "@/components/job-notes"
+import { WorkerAssignment } from "@/components/time-tracking/worker-assignment"
+import { TimeTracker } from "@/components/time-tracking/time-tracker"
+import { CostSummary } from "@/components/time-tracking/cost-summary"
+import { JobStatistics } from "@/components/job-statistics"
 import type { Job, Client, Task, Note, Photo } from "@/types/database"
 
 interface JobWithDetails extends Job {
@@ -98,6 +102,7 @@ export default function JobDetailsPage() {
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
   const [isRecurringTaskDialogOpen, setIsRecurringTaskDialogOpen] = useState(false)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [pendingTaskData, setPendingTaskData] = useState<{title: string, description: string} | null>(null)
   const [recurringJobInstances, setRecurringJobInstances] = useState<Job[]>([])
   const [currentInstanceIndex, setCurrentInstanceIndex] = useState(-1)
@@ -644,6 +649,10 @@ export default function JobDetailsPage() {
     }
   }
 
+  const handleWorkerAssignmentChange = useCallback(() => {
+    setRefreshTrigger(prev => prev + 1)
+  }, [])
+
   const handleKeyPress = (e: KeyboardEvent) => {
     if (!lightboxOpen) return
     
@@ -1043,6 +1052,34 @@ export default function JobDetailsPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Worker Assignments and Time Tracking */}
+          {(job.status === 'scheduled' || job.status === 'in_progress') && (
+            <>
+              <WorkerAssignment 
+                jobId={job.id}
+                onAssignmentChange={handleWorkerAssignmentChange}
+              />
+              
+              <TimeTracker 
+                jobId={job.id}
+                onTimeUpdate={handleWorkerAssignmentChange}
+              />
+              
+              <CostSummary 
+                jobId={job.id}
+                agreedHours={job.agreed_hours}
+                refreshTrigger={refreshTrigger}
+              />
+              
+              <JobStatistics
+                jobId={job.id}
+                agreedHours={job.agreed_hours}
+                actualCost={job.actual_cost}
+                estimatedCost={job.estimated_cost}
+              />
+            </>
+          )}
 
           {/* Tasks */}
           <Card className="crm-card" ref={taskSectionRef}>

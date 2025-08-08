@@ -357,6 +357,7 @@ export const createJob = async (jobData: {
   description: string
   scheduled_date: string
   scheduled_time: string
+  agreed_hours?: string
   status?: 'enquiry' | 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
 }) => {
   try {
@@ -374,10 +375,11 @@ export const createJob = async (jobData: {
       throw new Error('User not authenticated')
     }
 
-    // Add user_id to the job data
+    // Add user_id to the job data and process agreed_hours
     const jobDataWithUser = {
       ...jobData,
-      user_id: user.id
+      user_id: user.id,
+      agreed_hours: jobData.agreed_hours ? parseFloat(jobData.agreed_hours) : null
     }
 
     const { data, error } = await supabase
@@ -1017,6 +1019,7 @@ export const getUserProfile = async () => {
         return {
           user_id: user.id,
           subscription_tier: 'free',
+          hourly_rate: 0,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }
@@ -1027,6 +1030,7 @@ export const getUserProfile = async () => {
         return {
           user_id: user.id,
           subscription_tier: 'free',
+          hourly_rate: 0,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }
@@ -1041,6 +1045,7 @@ export const getUserProfile = async () => {
     return {
       user_id: '',
       subscription_tier: 'free',
+      hourly_rate: 0,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
@@ -1322,6 +1327,7 @@ export const createRecurringJob = async (jobData: {
   start_date: string
   end_date?: string
   scheduled_time: string
+  agreed_hours?: string
   is_active?: boolean
 }) => {
   // Get current user
@@ -1334,7 +1340,8 @@ export const createRecurringJob = async (jobData: {
     .from('recurring_jobs')
     .insert([{
       ...jobData,
-      user_id: user.id
+      user_id: user.id,
+      agreed_hours: jobData.agreed_hours ? parseFloat(jobData.agreed_hours) : null
     }])
     .select()
     .single()
@@ -1350,6 +1357,7 @@ export const updateRecurringJob = async (id: string, jobData: Partial<{
   start_date: string
   end_date?: string
   scheduled_time: string
+  agreed_hours?: number | null
   is_active: boolean
 }>) => {
   const { data, error } = await supabase
@@ -1363,6 +1371,25 @@ export const updateRecurringJob = async (id: string, jobData: Partial<{
   return data
 }
 
+export const getJobsForRecurringJob = async (recurringJobId: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { data, error } = await supabase
+      .from('jobs')
+      .select('*')
+      .eq('recurring_job_id', recurringJobId)
+      .eq('user_id', user.id)
+      .order('scheduled_date', { ascending: true })
+
+    if (error) throw error
+    return data || []
+  } catch (error) {
+    console.error('Error getting jobs for recurring job:', error)
+    throw error
+  }
+}
 
 // Generate job instances from a recurring job
 export const generateJobInstances = async (recurringJobId: string, untilDate?: string) => {
@@ -1415,7 +1442,8 @@ export const generateJobInstances = async (recurringJobId: string, untilDate?: s
           end_time: null, // Can be set individually
           recurring_job_id: recurringJobId,
           recurring_instance_date: currentDate.toISOString().split('T')[0],
-          status: 'scheduled' as const
+          status: 'scheduled' as const,
+          agreed_hours: recurringJob.agreed_hours || null
         })
       }
       
@@ -2491,6 +2519,269 @@ export const deleteRecurringJobNote = async (noteId: string) => {
     return true
   } catch (error) {
     console.error('Error deleting recurring job note:', error)
+    throw error
+  }
+}
+
+// Job Worker Assignment operations
+export const getJobWorkerAssignments = async (jobId: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { data, error } = await supabase
+      .from('job_worker_assignments')
+      .select(`
+        *,
+        sub_contractors(
+          id,
+          first_name,
+          last_name,
+          email,
+          hourly_rate
+        )
+      `)
+      .eq('job_id', jobId)
+      .order('created_at', { ascending: true })
+
+    if (error) throw error
+    return data || []
+  } catch (error) {
+    console.error('Error getting job worker assignments:', error)
+    throw error
+  }
+}
+
+export const assignWorkerToJob = async (assignmentData: {
+  job_id: string
+  worker_id: string
+  worker_type: 'owner' | 'sub_contractor'
+  hourly_rate: number
+  assigned_hours?: number
+}) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { data, error } = await supabase
+      .from('job_worker_assignments')
+      .insert([{
+        ...assignmentData,
+        is_clocked_in: false,
+        actual_hours: 0,
+        total_cost: 0
+      }])
+      .select()
+      .single()
+
+    if (error) throw error
+    
+    // Update job estimated cost
+    await updateJobEstimatedCost(assignmentData.job_id)
+    
+    return data
+  } catch (error) {
+    console.error('Error assigning worker to job:', error)
+    throw error
+  }
+}
+
+export const removeWorkerFromJob = async (assignmentId: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    // Get the assignment to get job_id for cost update
+    const { data: assignment } = await supabase
+      .from('job_worker_assignments')
+      .select('job_id')
+      .eq('id', assignmentId)
+      .single()
+
+    const { error } = await supabase
+      .from('job_worker_assignments')
+      .delete()
+      .eq('id', assignmentId)
+
+    if (error) throw error
+
+    // Update job costs
+    if (assignment) {
+      await updateJobCosts(assignment.job_id)
+    }
+    
+    return true
+  } catch (error) {
+    console.error('Error removing worker from job:', error)
+    throw error
+  }
+}
+
+export const clockInWorker = async (assignmentId: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { data, error } = await supabase
+      .from('job_worker_assignments')
+      .update({
+        clock_in_time: new Date().toISOString(),
+        is_clocked_in: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', assignmentId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error('Error clocking in worker:', error)
+    throw error
+  }
+}
+
+export const clockOutWorker = async (assignmentId: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    // First get the current assignment data
+    const { data: assignment, error: getError } = await supabase
+      .from('job_worker_assignments')
+      .select('*')
+      .eq('id', assignmentId)
+      .single()
+
+    if (getError || !assignment) throw getError || new Error('Assignment not found')
+    if (!assignment.clock_in_time) throw new Error('Worker is not clocked in')
+
+    const clockOutTime = new Date().toISOString()
+    const clockInTime = new Date(assignment.clock_in_time)
+    const hoursWorked = (new Date(clockOutTime).getTime() - clockInTime.getTime()) / (1000 * 60 * 60)
+    const totalCost = hoursWorked * assignment.hourly_rate
+    const newActualHours = (assignment.actual_hours || 0) + hoursWorked
+
+    const { data, error } = await supabase
+      .from('job_worker_assignments')
+      .update({
+        clock_out_time: clockOutTime,
+        is_clocked_in: false,
+        actual_hours: newActualHours,
+        total_cost: newActualHours * assignment.hourly_rate,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', assignmentId)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    // Update job actual cost
+    await updateJobCosts(assignment.job_id)
+    
+    return data
+  } catch (error) {
+    console.error('Error clocking out worker:', error)
+    throw error
+  }
+}
+
+export const updateJobEstimatedCost = async (jobId: string) => {
+  try {
+    const { data: assignments, error } = await supabase
+      .from('job_worker_assignments')
+      .select('hourly_rate, assigned_hours')
+      .eq('job_id', jobId)
+
+    if (error) throw error
+
+    const estimatedCost = assignments?.reduce((total, assignment) => {
+      return total + (assignment.hourly_rate * (assignment.assigned_hours || 0))
+    }, 0) || 0
+
+    const { error: updateError } = await supabase
+      .from('jobs')
+      .update({ estimated_cost: estimatedCost })
+      .eq('id', jobId)
+
+    if (updateError) throw updateError
+    return estimatedCost
+  } catch (error) {
+    console.error('Error updating job estimated cost:', error)
+    throw error
+  }
+}
+
+export const updateJobCosts = async (jobId: string) => {
+  try {
+    const { data: assignments, error } = await supabase
+      .from('job_worker_assignments')
+      .select('hourly_rate, assigned_hours, actual_hours, total_cost')
+      .eq('job_id', jobId)
+
+    if (error) throw error
+
+    const estimatedCost = assignments?.reduce((total, assignment) => {
+      return total + (assignment.hourly_rate * (assignment.assigned_hours || 0))
+    }, 0) || 0
+
+    const actualCost = assignments?.reduce((total, assignment) => {
+      return total + (assignment.total_cost || 0)
+    }, 0) || 0
+
+    const { error: updateError } = await supabase
+      .from('jobs')
+      .update({ 
+        estimated_cost: estimatedCost,
+        actual_cost: actualCost
+      })
+      .eq('id', jobId)
+
+    if (updateError) throw updateError
+    return { estimatedCost, actualCost }
+  } catch (error) {
+    console.error('Error updating job costs:', error)
+    throw error
+  }
+}
+
+// User Profile operations for hourly rate
+export const updateUserHourlyRate = async (hourlyRate: number) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .update({ hourly_rate: hourlyRate })
+      .eq('user_id', user.id)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error('Error updating user hourly rate:', error)
+    throw error
+  }
+}
+
+export const getUserHourlyRate = async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('hourly_rate')
+      .eq('user_id', user.id)
+      .single()
+
+    if (error) throw error
+    return data?.hourly_rate || 0
+  } catch (error) {
+    console.error('Error getting user hourly rate:', error)
     throw error
   }
 }

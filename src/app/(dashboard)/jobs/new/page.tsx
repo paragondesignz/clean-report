@@ -24,7 +24,8 @@ export default function NewJobPage() {
     title: "",
     description: "",
     scheduled_date: "",
-    scheduled_time: ""
+    scheduled_time: "",
+    agreed_hours: ""
   })
 
   const fetchClients = useCallback(async () => {
@@ -140,7 +141,7 @@ export default function NewJobPage() {
               />
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="date">Scheduled Date</Label>
                 <Input
@@ -161,6 +162,20 @@ export default function NewJobPage() {
                   value={formData.scheduled_time}
                   onChange={(e) => setFormData({ ...formData, scheduled_time: e.target.value })}
                   required
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="agreed_hours">Agreed Hours (Optional)</Label>
+                <Input
+                  id="agreed_hours"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  value={formData.agreed_hours}
+                  onChange={(e) => setFormData({ ...formData, agreed_hours: e.target.value })}
+                  placeholder="e.g., 2.5"
                   className="mt-1"
                 />
               </div>

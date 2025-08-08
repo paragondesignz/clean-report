@@ -11,12 +11,14 @@ import {
   CreditCard, 
   Calendar,
   Zap,
-  Smartphone
+  Smartphone,
+  Users
 } from "lucide-react"
 import { AccountSettings } from "@/components/settings/account-settings"
 import { SubscriptionManagement } from "@/components/settings/subscription-management"
 import { PaymentMethods } from "@/components/settings/payment-methods"
 import { MobilePortalSettings } from "@/components/settings/mobile-portal-settings"
+import { CustomerPortalSettings } from "@/components/settings/customer-portal-settings"
 import { XeroIntegrationComponent } from "@/components/integrations/xero-integration"
 import StripeIntegrationComponent from "@/components/integrations/stripe-integration"
 import TwilioIntegrationComponent from "@/components/integrations/twilio-integration"
@@ -50,7 +52,7 @@ export default function SettingsPage() {
 
       {/* Settings Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:grid-cols-6">
           <TabsTrigger value="account" className="flex items-center space-x-2">
             <User className="h-4 w-4" />
             <span className="hidden sm:inline">Account</span>
@@ -66,6 +68,10 @@ export default function SettingsPage() {
           <TabsTrigger value="mobile" className="flex items-center space-x-2">
             <Smartphone className="h-4 w-4" />
             <span className="hidden sm:inline">Mobile</span>
+          </TabsTrigger>
+          <TabsTrigger value="customer-portal" className="flex items-center space-x-2">
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Customers</span>
           </TabsTrigger>
           <TabsTrigger value="integrations" className="flex items-center space-x-2">
             <Zap className="h-4 w-4" />
@@ -91,6 +97,11 @@ export default function SettingsPage() {
         {/* Mobile Portal Tab */}
         <TabsContent value="mobile" className="space-y-6">
           <MobilePortalSettings />
+        </TabsContent>
+
+        {/* Customer Portal Tab */}
+        <TabsContent value="customer-portal" className="space-y-6">
+          <CustomerPortalSettings />
         </TabsContent>
 
         {/* Integrations Tab */}

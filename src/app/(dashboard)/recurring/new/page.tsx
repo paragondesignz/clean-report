@@ -27,6 +27,7 @@ export default function NewRecurringJobPage() {
     start_date: "",
     end_date: "",
     scheduled_time: "",
+    agreed_hours: "",
     is_active: true
   })
 
@@ -184,16 +185,32 @@ export default function NewRecurringJobPage() {
               </div>
             </div>
             
-            <div>
-              <Label htmlFor="time">Scheduled Time</Label>
-              <Input
-                id="time"
-                type="time"
-                value={formData.scheduled_time}
-                onChange={(e) => setFormData({ ...formData, scheduled_time: e.target.value })}
-                required
-                className="mt-1"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="time">Scheduled Time</Label>
+                <Input
+                  id="time"
+                  type="time"
+                  value={formData.scheduled_time}
+                  onChange={(e) => setFormData({ ...formData, scheduled_time: e.target.value })}
+                  required
+                  className="mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="agreed_hours">Agreed Hours per Job (Optional)</Label>
+                <Input
+                  id="agreed_hours"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  value={formData.agreed_hours}
+                  onChange={(e) => setFormData({ ...formData, agreed_hours: e.target.value })}
+                  placeholder="e.g., 2.5"
+                  className="mt-1"
+                />
+              </div>
             </div>
             
             <div className="flex items-center space-x-2">

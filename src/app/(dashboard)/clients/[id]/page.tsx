@@ -49,6 +49,8 @@ import { TaskSuggestions } from "@/components/ai/task-suggestions"
 import { JobNotes } from "@/components/job-notes"
 import { Switch } from "@/components/ui/switch"
 import { createJob, createRecurringJob } from "@/lib/supabase-client"
+import { RecurringJobEditDialog } from "@/components/recurring-job-edit-dialog"
+import { CustomerPortalQRCode } from "@/components/customer-portal/customer-portal-qr-code"
 
 interface ClientNote {
   id: string
@@ -69,6 +71,9 @@ interface ClientWithDetails extends Client {
   avgTaskCompletion?: number
   lastJobDate?: string | null
   daysSinceLastJob?: number | null
+  totalActualCost?: number
+  totalEstimatedCost?: number
+  totalAgreedHours?: number
 }
 
 // Component to display recurring jobs for a client
@@ -142,15 +147,21 @@ function ClientRecurringJobsList({ clientId }: { clientId: string }) {
                 )}
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push(`/calendar?recurring=${recurringJob.id}`)}
-              className="text-blue-600 hover:text-blue-700"
-            >
-              <ExternalLink className="h-4 w-4 mr-1" />
-              View in Calendar
-            </Button>
+            <div className="flex space-x-2">
+              <RecurringJobEditDialog 
+                recurringJob={recurringJob} 
+                onUpdate={() => fetchRecurringJobs()}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/calendar?recurring=${recurringJob.id}&date=${new Date().toISOString().split('T')[0]}`)}
+                className="text-blue-600 hover:text-blue-700"
+              >
+                <ExternalLink className="h-4 w-4 mr-1" />
+                View in Calendar
+              </Button>
+            </div>
           </div>
         </div>
       ))}
@@ -392,8 +403,29 @@ export default function ClientDetailsPage() {
                  jobDate.getFullYear() === currentYear &&
                  job.status === 'completed'
         })
-        const revenuePerJob = 150 // This could be configurable or job-specific
-        const monthlyRevenue = thisMonthJobs.length * revenuePerJob
+        // Calculate revenue based on actual costs where available, fallback to estimate
+        const monthlyRevenue = thisMonthJobs.reduce((total, job) => {
+          if (job.actual_cost && job.actual_cost > 0) {
+            return total + job.actual_cost
+          } else if (job.estimated_cost && job.estimated_cost > 0) {
+            return total + job.estimated_cost
+          } else {
+            return total + 150 // Fallback estimate
+          }
+        }, 0)
+        
+        // Calculate total hours and costs across all completed jobs
+        const totalActualCost = clientJobs
+          .filter(job => job.status === 'completed' && job.actual_cost)
+          .reduce((total, job) => total + (job.actual_cost || 0), 0)
+        
+        const totalEstimatedCost = clientJobs
+          .filter(job => job.estimated_cost)
+          .reduce((total, job) => total + (job.estimated_cost || 0), 0)
+        
+        const totalAgreedHours = clientJobs
+          .filter(job => job.agreed_hours)
+          .reduce((total, job) => total + (job.agreed_hours || 0), 0)
         
         // Calculate average task completion from history
         const avgTaskCompletion = completionHistoryData.length > 0 
@@ -422,6 +454,9 @@ export default function ClientDetailsPage() {
           completionRate,
           avgTaskCompletion,
           lastJobDate,
+          totalActualCost,
+          totalEstimatedCost,
+          totalAgreedHours,
           daysSinceLastJob
         }
         
@@ -824,6 +859,7 @@ export default function ClientDetailsPage() {
             </>
           ) : (
             <>
+              <CustomerPortalQRCode client={client} />
               <Button variant="outline" onClick={() => setIsEditing(true)}>
                 <Edit className="h-4 w-4 mr-2" />
                 Edit Client
@@ -917,6 +953,40 @@ export default function ClientDetailsPage() {
                 </p>
               </div>
               <TrendingUp className="h-8 w-8 text-orange-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-600">Total Costs</p>
+                <p className="text-2xl font-bold text-blue-900">
+                  ${(client.totalActualCost || 0).toLocaleString()}
+                </p>
+                <p className="text-xs text-blue-700 mt-1">
+                  ${(client.totalEstimatedCost || 0).toLocaleString()} estimated
+                </p>
+              </div>
+              <DollarSign className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-indigo-200 bg-gradient-to-br from-indigo-50 to-indigo-100">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-indigo-600">Agreed Hours</p>
+                <p className="text-2xl font-bold text-indigo-900">
+                  {(client.totalAgreedHours || 0).toLocaleString()}h
+                </p>
+                <p className="text-xs text-indigo-700 mt-1">
+                  Total across all jobs
+                </p>
+              </div>
+              <Clock className="h-8 w-8 text-indigo-600" />
             </div>
           </CardContent>
         </Card>
