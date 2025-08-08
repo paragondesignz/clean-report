@@ -284,6 +284,7 @@ export default function JobsPage() {
     client: job.client?.name || 'Unknown Client',
     status: job.status,
     scheduledDate: formatListDate(job.scheduled_date),
+    scheduledDateRaw: job.scheduled_date, // Raw date for proper sorting
     scheduledTime: formatTime(job.scheduled_time),
     priority: getJobPriority(job),
     value: getJobValue(job),
@@ -410,6 +411,10 @@ export default function JobsPage() {
             { value: 'Low', label: 'Low' }
           ]}
         ]}
+        defaultSort={{
+          column: 'scheduledDate',
+          direction: 'desc'
+        }}
       />
 
       {/* Load More Button */}

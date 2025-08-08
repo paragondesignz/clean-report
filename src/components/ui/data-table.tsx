@@ -65,6 +65,10 @@ interface DataTableProps {
   searchPlaceholder?: string
   filterOptions?: FilterOption[]
   customActions?: CustomAction[]
+  defaultSort?: {
+    column: string
+    direction: 'asc' | 'desc'
+  }
 }
 
 export function DataTable({
@@ -77,12 +81,13 @@ export function DataTable({
   onDelete,
   searchPlaceholder = "Search...",
   filterOptions = [],
-  customActions = []
+  customActions = [],
+  defaultSort
 }: DataTableProps) {
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
-  const [sortColumn, setSortColumn] = useState<string | null>(null)
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [sortColumn, setSortColumn] = useState<string | null>(defaultSort?.column || null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(defaultSort?.direction || 'asc')
   const [filters, setFilters] = useState<Record<string, string>>({})
 
   // Filter and sort data
@@ -108,8 +113,14 @@ export function DataTable({
     // Apply sorting
     if (sortColumn) {
       result.sort((a, b) => {
-        const aVal = a[sortColumn]
-        const bVal = b[sortColumn]
+        let aVal = a[sortColumn]
+        let bVal = b[sortColumn]
+        
+        // Special handling for date columns - use raw date if available
+        if (sortColumn === 'scheduledDate' && a.scheduledDateRaw && b.scheduledDateRaw) {
+          aVal = new Date(a.scheduledDateRaw).getTime()
+          bVal = new Date(b.scheduledDateRaw).getTime()
+        }
         
         if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1
         if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1
