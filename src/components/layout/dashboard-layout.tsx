@@ -57,6 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: "/dashboard", label: "Dashboard", icon: Home },
     { href: "/calendar", label: "Calendar", icon: Calendar },
     { href: "/jobs", label: "Jobs", icon: FileText },
+    { href: "/recurring", label: "Recurring Jobs", icon: Repeat },
     { href: "/clients", label: "Clients", icon: Users },
     { href: "/reports", label: "Reports", icon: ClipboardList },
   ]
@@ -135,7 +136,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           {/* Operations Management - Admin Only */}
-          {userRole === 'admin' && (operationsMenuItems.length > 0 || access.recurringJobs || access.subContractors) && (
+          {userRole === 'admin' && (operationsMenuItems.length > 0 || access.subContractors) && (
             <div>
               <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                 Operations
@@ -161,21 +162,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </Link>
                   )
                 })}
-                
-                {access.recurringJobs && (
-                  <Link
-                    href="/recurring"
-                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                      pathname === "/recurring"
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                    }`}
-                    onClick={() => setSidebarOpen(false)}
-                  >
-                    <Repeat className="w-5 h-5 mr-3" />
-                    Recurring Jobs
-                  </Link>
-                )}
                 
                 {access.subContractors && (
                   <Link
