@@ -70,6 +70,7 @@ import { JobSubContractorAssignment } from "@/components/job-sub-contractor-assi
 import { RecurringJobDeleteDialog } from "@/components/recurring-job-delete-dialog"
 import { RecurringTaskDialog } from "@/components/recurring-task-dialog"
 import { RecurringJobNotes } from "@/components/recurring-job-notes"
+import { JobNotes } from "@/components/job-notes"
 import type { Job, Client, Task, Note, Photo } from "@/types/database"
 
 interface JobWithDetails extends Job {
@@ -89,8 +90,6 @@ export default function JobDetailsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isUnsavedChangesDialogOpen, setIsUnsavedChangesDialogOpen] = useState(false)
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null)
-  const [newNote, setNewNote] = useState("")
-  const [editingNote, setEditingNote] = useState<Note | null>(null)
   const [newTask, setNewTask] = useState({ title: "", description: "" })
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [clients, setClients] = useState<Client[]>([])
@@ -455,82 +454,6 @@ export default function JobDetailsPage() {
     }
   }
 
-  const handleAddNote = async () => {
-    if (!job || !newNote.trim()) return
-
-    try {
-      await createNote({
-        job_id: job.id,
-        content: newNote
-      })
-
-      toast({
-        title: "Success",
-        description: "Note added successfully"
-      })
-
-      setNewNote("")
-      fetchJobDetails(job.id)
-    } catch (error) {
-      console.error('Error adding note:', error)
-      toast({
-        title: "Error",
-        description: "Failed to add note",
-        variant: "destructive"
-      })
-    }
-  }
-
-  const handleEditNote = async (note: Note) => {
-    setEditingNote(note)
-  }
-
-  const handleSaveNote = async () => {
-    if (!editingNote) return
-
-    try {
-      await updateNote(editingNote.id, {
-        content: editingNote.content
-      })
-
-      toast({
-        title: "Success",
-        description: "Note updated successfully"
-      })
-
-      setEditingNote(null)
-      if (job) {
-        fetchJobDetails(job.id)
-      }
-    } catch (error) {
-      console.error('Error updating note:', error)
-      toast({
-        title: "Error",
-        description: "Failed to update note",
-        variant: "destructive"
-      })
-    }
-  }
-
-  const handleDeleteNote = async (noteId: string) => {
-    if (!job) return
-
-    try {
-      await deleteNote(noteId)
-      toast({
-        title: "Success",
-        description: "Note deleted successfully"
-      })
-      fetchJobDetails(job.id)
-    } catch (error) {
-      console.error('Error deleting note:', error)
-      toast({
-        title: "Error",
-        description: "Failed to delete note",
-        variant: "destructive"
-      })
-    }
-  }
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
@@ -1097,80 +1020,13 @@ export default function JobDetailsPage() {
             />
           )}
 
-          {/* Notes */}
-          <Card className="crm-card">
-            <CardHeader>
-              <CardTitle className="text-gray-900">Notes</CardTitle>
-              <CardDescription>
-                Add notes and observations about the job
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex space-x-2">
-                <Textarea
-                  placeholder="Add a note..."
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  className="flex-1"
-                />
-                <Button onClick={handleAddNote} disabled={!newNote.trim()} className="bg-gray-900 hover:bg-gray-800 text-white">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="space-y-3">
-                {job.notes?.slice().reverse().map((note) => (
-                  <div key={note.id} className="p-3 bg-gray-50 rounded-lg">
-                    {editingNote?.id === note.id ? (
-                      <div className="space-y-2">
-                        <Textarea
-                          value={editingNote.content}
-                          onChange={(e) => setEditingNote({ ...editingNote, content: e.target.value })}
-                          rows={3}
-                        />
-                        <div className="flex space-x-2">
-                          <Button size="sm" onClick={handleSaveNote} className="bg-green-600 hover:bg-green-700 text-white">
-                            <Save className="h-3 w-3 mr-1" />
-                            Save
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => setEditingNote(null)}>
-                            <X className="h-3 w-3 mr-1" />
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-sm text-gray-700">{note.content}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <p className="text-xs text-gray-500">
-                            {new Date(note.created_at).toLocaleString()}
-                          </p>
-                          <div className="flex space-x-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditNote(note)}
-                              className="text-blue-600 hover:text-blue-700 h-6 px-2"
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteNote(note.id)}
-                              className="text-red-600 hover:text-red-700 h-6 px-2"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          {/* Enhanced Job Notes */}
+          <JobNotes 
+            jobId={job.id} 
+            jobTitle={job.title}
+            isRecurringJob={!!job.recurring_job_id}
+            recurringJobId={job.recurring_job_id || undefined}
+          />
 
           {/* Photos */}
           <Card className="crm-card">

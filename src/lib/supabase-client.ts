@@ -692,6 +692,7 @@ export const getNotes = async (jobId: string) => {
 export const createNote = async (noteData: {
   job_id: string
   content: string
+  category?: string
 }) => {
   const { data, error } = await supabase
     .from('notes')
@@ -705,6 +706,7 @@ export const createNote = async (noteData: {
 
 export const updateNote = async (id: string, noteData: Partial<{
   content: string
+  category: string
 }>) => {
   const { data, error } = await supabase
     .from('notes')
@@ -1209,7 +1211,7 @@ export const updateCalendarIntegration = async (integrationData: Partial<{
 }
 
 // Recurring job operations
-export const getRecurringJobs = async () => {
+export const getRecurringJobs = async (limit?: number, offset?: number) => {
   try {
     // Check environment variables
     if (!supabaseUrl || !supabaseAnonKey) {
@@ -1226,9 +1228,9 @@ export const getRecurringJobs = async () => {
       throw new Error('User not authenticated')
     }
 
-    console.log('Fetching recurring jobs for user:', user.id)
+    console.log('Fetching recurring jobs for user:', user.id, 'limit:', limit, 'offset:', offset)
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('recurring_jobs')
       .select(`
         *,
@@ -1236,6 +1238,16 @@ export const getRecurringJobs = async () => {
       `)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
+
+    // Add pagination if provided
+    if (limit !== undefined) {
+      query = query.limit(limit)
+    }
+    if (offset !== undefined) {
+      query = query.range(offset, offset + (limit || 20) - 1)
+    }
+
+    const { data, error } = await query
     
     if (error) {
       console.error('Supabase getRecurringJobs error:', error)
@@ -1246,6 +1258,28 @@ export const getRecurringJobs = async () => {
     return data
   } catch (error) {
     console.error('getRecurringJobs error:', error)
+    throw error
+  }
+}
+
+export const getRecurringJobsCount = async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { count, error } = await supabase
+      .from('recurring_jobs')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+    
+    if (error) {
+      console.error('getRecurringJobsCount error:', error)
+      throw error
+    }
+    
+    return count || 0
+  } catch (error) {
+    console.error('getRecurringJobsCount error:', error)
     throw error
   }
 }

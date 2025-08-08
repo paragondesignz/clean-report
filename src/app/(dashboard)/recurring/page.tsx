@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Plus, Edit, Trash2, Calendar, Clock, User, RefreshCw, CheckCircle, XCircle, Building2, DollarSign, Play, Eye } from "lucide-react"
-import { getRecurringJobs, createRecurringJob, updateRecurringJob, deleteRecurringJob, getClients, testRecurringJobsTable, checkRequiredTables, generateJobInstances, getRecurringJobInstances } from "@/lib/supabase-client"
+import { getRecurringJobs, getRecurringJobsCount, createRecurringJob, updateRecurringJob, deleteRecurringJob, getClients, testRecurringJobsTable, checkRequiredTables, generateJobInstances, getRecurringJobInstances } from "@/lib/supabase-client"
 import { formatDate, formatTime, formatDistanceToNow, formatListDate } from "@/lib/utils"
 import { DataTable } from "@/components/ui/data-table"
 import { useSubscription } from "@/hooks/use-subscription"
@@ -25,6 +25,10 @@ export default function RecurringJobsPage() {
   const [recurringJobs, setRecurringJobs] = useState<RecurringJobWithClient[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [totalRecurringJobsCount, setTotalRecurringJobsCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState(0)
+  const RECURRING_JOBS_PER_PAGE = 20
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
   const [editingJob, setEditingJob] = useState<RecurringJobWithClient | null>(null)
@@ -61,9 +65,10 @@ export default function RecurringJobsPage() {
       }
       
       console.log('Fetching recurring jobs data...')
-      const [recurringJobsData, clientsData] = await Promise.all([
-        getRecurringJobs(),
-        getClients()
+      const [recurringJobsData, clientsData, totalCount] = await Promise.all([
+        getRecurringJobs(RECURRING_JOBS_PER_PAGE, 0),
+        getClients(),
+        getRecurringJobsCount()
       ])
       
       console.log('Recurring jobs data fetched successfully:', {
@@ -73,6 +78,8 @@ export default function RecurringJobsPage() {
       
       setRecurringJobs(recurringJobsData || [])
       setClients(clientsData || [])
+      setTotalRecurringJobsCount(totalCount)
+      setCurrentPage(0)
     } catch (error) {
       console.error('Error fetching data:', error)
       console.error('Error details:', {
@@ -89,6 +96,33 @@ export default function RecurringJobsPage() {
       setLoading(false)
     }
   }, [toast])
+
+  const loadMoreRecurringJobs = useCallback(async () => {
+    if (loadingMore || recurringJobs.length >= totalRecurringJobsCount) return
+    
+    try {
+      setLoadingMore(true)
+      const nextPage = currentPage + 1
+      const offset = nextPage * RECURRING_JOBS_PER_PAGE
+      
+      console.log(`Loading more recurring jobs - page ${nextPage}, offset ${offset}`)
+      const moreJobs = await getRecurringJobs(RECURRING_JOBS_PER_PAGE, offset)
+      
+      setRecurringJobs(prev => [...prev, ...(moreJobs || [])])
+      setCurrentPage(nextPage)
+      
+      console.log(`Loaded ${moreJobs?.length || 0} more recurring jobs`)
+    } catch (error) {
+      console.error('Error loading more recurring jobs:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load more recurring jobs",
+        variant: "destructive"
+      })
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [recurringJobs.length, totalRecurringJobsCount, currentPage, loadingMore, toast])
 
   useEffect(() => {
     fetchData()
@@ -491,6 +525,36 @@ export default function RecurringJobsPage() {
           }
         ]}
       />
+
+      {/* Load More Button */}
+      {recurringJobs.length < totalRecurringJobsCount && (
+        <div className="flex justify-center py-6">
+          <Button
+            onClick={loadMoreRecurringJobs}
+            disabled={loadingMore}
+            variant="outline"
+            size="lg"
+          >
+            {loadingMore ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+                Loading more recurring jobs...
+              </>
+            ) : (
+              <>
+                Load More Recurring Jobs ({recurringJobs.length} of {totalRecurringJobsCount})
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+
+      {/* Show "All jobs loaded" when at the end */}
+      {recurringJobs.length >= totalRecurringJobsCount && totalRecurringJobsCount > RECURRING_JOBS_PER_PAGE && (
+        <div className="text-center py-6 text-gray-500">
+          All {totalRecurringJobsCount} recurring jobs loaded
+        </div>
+      )}
 
       {/* Create/Edit Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
