@@ -258,6 +258,67 @@ export const getJobs = async () => {
   }
 }
 
+// Get jobs for a specific date range (useful for calendar views)
+export const getJobsForDateRange = async (startDate: string, endDate: string) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { data, error } = await supabase
+      .from('jobs')
+      .select(`
+        *,
+        client:clients(name, email),
+        recurring_job:recurring_jobs(title, frequency)
+      `)
+      .gte('scheduled_date', startDate)
+      .lte('scheduled_date', endDate)
+      .eq('user_id', user.id)
+      .order('scheduled_date', { ascending: true })
+    
+    if (error) throw error
+    return data || []
+  } catch (error) {
+    console.error('Error fetching jobs for date range:', error)
+    throw error
+  }
+}
+
+// Get jobs for a specific client, including recurring job instances
+export const getJobsForClient = async (clientId: string, limit?: number, offset?: number) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    let query = supabase
+      .from('jobs')
+      .select(`
+        *,
+        client:clients(name, email),
+        recurring_job:recurring_jobs(title, frequency)
+      `)
+      .eq('client_id', clientId)
+      .eq('user_id', user.id)
+      .order('scheduled_date', { ascending: false })
+
+    if (limit) {
+      query = query.limit(limit)
+    }
+    
+    if (offset) {
+      query = query.range(offset, offset + (limit || 10) - 1)
+    }
+    
+    const { data, error } = await query
+    
+    if (error) throw error
+    return data || []
+  } catch (error) {
+    console.error('Error fetching jobs for client:', error)
+    throw error
+  }
+}
+
 export const createJob = async (jobData: {
   client_id: string
   title: string

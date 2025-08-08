@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -26,10 +27,13 @@ import {
   Pencil,
   ExternalLink,
   History,
-  Copy
+  Copy,
+  RefreshCw,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
-import { getClient, getJobs } from "@/lib/supabase-client"
+import { getClient, getJobsForClient } from "@/lib/supabase-client"
 import type { Client, Job } from "@/types/database"
 import { GoogleMaps } from "@/components/ui/google-maps"
 
@@ -46,6 +50,161 @@ interface ClientWithDetails extends Client {
   totalJobs?: number
   completedJobs?: number
   totalRevenue?: number
+}
+
+// Component to display jobs for a client with smart pagination
+function ClientJobsList({ clientId }: { clientId: string }) {
+  const [jobs, setJobs] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const router = useRouter()
+
+  const loadJobs = useCallback(async (pageNum: number = 1, append: boolean = false) => {
+    try {
+      setLoading(pageNum === 1)
+      const limit = 10
+      const offset = (pageNum - 1) * limit
+      
+      const jobsData = await getJobsForClient(clientId, limit, offset)
+      
+      if (append) {
+        setJobs(prev => [...prev, ...jobsData])
+      } else {
+        setJobs(jobsData)
+      }
+      
+      setHasMore(jobsData.length === limit)
+    } catch (error) {
+      console.error('Error loading client jobs:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [clientId])
+
+  useEffect(() => {
+    loadJobs()
+  }, [loadJobs])
+
+  const loadMore = () => {
+    const nextPage = page + 1
+    setPage(nextPage)
+    loadJobs(nextPage, true)
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'scheduled': return 'bg-blue-100 text-blue-800'
+      case 'in_progress': return 'bg-yellow-100 text-yellow-800'  
+      case 'completed': return 'bg-green-100 text-green-800'
+      case 'cancelled': return 'bg-red-100 text-red-800'
+      case 'enquiry': return 'bg-purple-100 text-purple-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  if (loading && jobs.length === 0) {
+    return <div className="text-center py-4 text-gray-500">Loading jobs...</div>
+  }
+
+  if (jobs.length === 0) {
+    return <div className="text-center py-8 text-gray-500">No jobs found for this client.</div>
+  }
+
+  const displayedJobs = expanded ? jobs : jobs.slice(0, 5)
+  const recurringJobs = jobs.filter(job => job.recurring_job_id)
+  const regularJobs = jobs.filter(job => !job.recurring_job_id)
+
+  return (
+    <div className="space-y-4">
+      {/* Summary for recurring jobs */}
+      {recurringJobs.length > 0 && (
+        <div className="bg-purple-50 p-3 rounded-lg">
+          <div className="flex items-center space-x-2">
+            <RefreshCw className="h-4 w-4 text-purple-600" />
+            <span className="text-sm font-medium text-purple-800">
+              {recurringJobs.length} recurring job instance{recurringJobs.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <p className="text-xs text-purple-600 mt-1">
+            These are individual instances of recurring job patterns
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {displayedJobs.map((job) => (
+          <div
+            key={job.id}
+            className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ${
+              job.recurring_job_id ? 'border-l-4 border-l-purple-400' : ''
+            }`}
+            onClick={() => router.push(`/jobs/${job.id}`)}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center space-x-2">
+                  <span className="font-medium">{job.title}</span>
+                  {job.recurring_job_id && (
+                    <RefreshCw className="h-3 w-3 text-purple-600" title="Recurring job instance" />
+                  )}
+                </div>
+                <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
+                  <span className="flex items-center space-x-1">
+                    <Clock className="h-3 w-3" />
+                    <span>{formatDate(job.scheduled_date)}</span>
+                  </span>
+                  <span>{job.scheduled_time}</span>
+                  {job.end_time && <span>- {job.end_time}</span>}
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(job.status)}`}>
+                  {job.status.replace('_', ' ')}
+                </span>
+                <ExternalLink className="h-4 w-4 text-gray-400" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {jobs.length > 5 && (
+        <div className="flex items-center justify-center space-x-2 pt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setExpanded(!expanded)}
+            className="text-gray-600"
+          >
+            {expanded ? (
+              <>
+                <ChevronUp className="h-4 w-4 mr-1" />
+                Show Less
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-4 w-4 mr-1" />
+                Show More ({jobs.length - 5} more)
+              </>
+            )}
+          </Button>
+          
+          {expanded && hasMore && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadMore}
+              disabled={loading}
+            >
+              Load More Jobs
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function ClientDetailsPage() {
@@ -84,15 +243,15 @@ export default function ClientDetailsPage() {
       
       console.log('Fetching client details for ID:', clientId)
       
-      // Fetch client details and jobs data
+      // Fetch client details and recent jobs data
       const [clientData, jobsData] = await Promise.all([
         getClient(clientId),
-        getJobs()
+        getJobsForClient(clientId, 50) // Get first 50 jobs for statistics
       ])
       
       if (clientData) {
         // Calculate job statistics for this client
-        const clientJobs = jobsData?.filter(job => job.client_id === clientId) || []
+        const clientJobs = jobsData || []
         const totalJobs = clientJobs.length
         const completedJobs = clientJobs.filter(job => job.status === 'completed').length
         // const upcomingJobs = clientJobs.filter(job => ['scheduled', 'in_progress'].includes(job.status)).length
@@ -726,6 +885,29 @@ export default function ClientDetailsPage() {
                 <span className="text-sm text-slate-600">Total Notes</span>
                 <span className="text-sm font-medium">{client.notes?.length || 0}</span>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Recent Jobs */}
+          <Card className="border-slate-200">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-slate-900">Recent Jobs</CardTitle>
+                <CardDescription>
+                  Latest jobs for this client, including recurring job instances
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleViewJobs}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                View All
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <ClientJobsList clientId={client.id} />
             </CardContent>
           </Card>
 

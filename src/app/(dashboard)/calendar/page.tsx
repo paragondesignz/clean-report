@@ -26,7 +26,7 @@ import {
   initializeGoogleCalendar,
   authenticateGoogleCalendar
 } from "@/lib/google-calendar"
-import { getJobs, getCalendarIntegration, getClients } from "@/lib/supabase-client"
+import { getJobsForDateRange, getCalendarIntegration, getClients } from "@/lib/supabase-client"
 
 interface CalendarEvent {
   id: string
@@ -36,6 +36,7 @@ interface CalendarEvent {
   status: string
   client?: Client
   type: 'job' | 'appointment'
+  isRecurring?: boolean
 }
 
 export default function CalendarPage() {
@@ -51,17 +52,25 @@ export default function CalendarPage() {
   const loadCalendarData = useCallback(async () => {
     setLoading(true)
     try {
-      // Fetch jobs from Supabase
-      const jobsData = await getJobs()
+      // Calculate date range for current month + previous/next months for better UX
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
+      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 2, 0)
+      
+      const startDate = startOfMonth.toISOString().split('T')[0]
+      const endDate = endOfMonth.toISOString().split('T')[0]
+      
+      // Fetch jobs from Supabase for the date range (includes recurring job instances)
+      const jobsData = await getJobsForDateRange(startDate, endDate)
       if (jobsData) {
-        const calendarEvents: CalendarEvent[] = jobsData.map((job: JobWithClient) => ({
+        const calendarEvents: CalendarEvent[] = jobsData.map((job: any) => ({
           id: job.id,
-          title: job.title,
+          title: job.recurring_job_id ? `${job.title} (Recurring)` : job.title,
           date: job.scheduled_date,
           time: job.scheduled_time,
           status: job.status,
           type: "job" as const,
-          client: job.client
+          client: job.client,
+          isRecurring: !!job.recurring_job_id
         }))
         setEvents(calendarEvents)
       }
@@ -341,13 +350,14 @@ export default function CalendarPage() {
                       {getEventsForDate(day).map(event => (
                         <div
                           key={event.id}
-                          className="text-xs p-1 rounded cursor-pointer hover:bg-blue-50 transition-colors"
-                          title={`${event.title} - ${formatTime(event.time)}`}
+                          className={`text-xs p-1 rounded cursor-pointer hover:bg-blue-50 transition-colors ${event.isRecurring ? 'border-l-2 border-l-purple-400' : ''}`}
+                          title={`${event.title} - ${formatTime(event.time)} ${event.isRecurring ? '(Recurring Job Instance)' : ''}`}
                           onClick={() => handleEventClick(event)}
                         >
                           <div className="flex items-center space-x-1">
                             <Clock className="h-3 w-3 text-gray-400" />
                             <span className="truncate">{formatTime(event.time)}</span>
+                            {event.isRecurring && <RefreshCw className="h-3 w-3 text-purple-600" />}
                           </div>
                           <div className="truncate font-medium">{event.title}</div>
                           <Badge className={`text-xs ${getStatusColor(event.status)}`}>
