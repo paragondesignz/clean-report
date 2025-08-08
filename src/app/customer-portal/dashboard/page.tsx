@@ -35,6 +35,7 @@ import {
 } from "@/lib/customer-portal-client"
 import type { Client, JobWithClient } from "@/types/database"
 import { CustomerPortalChat } from "@/components/customer-portal/customer-portal-chat"
+import { GeneralFeedbackForm } from "@/components/customer-portal/general-feedback-form"
 
 export default function CustomerPortalDashboard() {
   const router = useRouter()
@@ -439,6 +440,20 @@ export default function CustomerPortalDashboard() {
                                 View Report
                               </Button>
                             )}
+                            {report.job?.id && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  // Open feedback form for this specific job
+                                  window.open(`/feedback/${report.job.id}`, '_blank', 'noopener,noreferrer')
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <Star className="h-4 w-4" />
+                                Rate Service
+                              </Button>
+                            )}
                           </div>
                         </div>
 
@@ -558,6 +573,15 @@ export default function CustomerPortalDashboard() {
               {/* AI Chat */}
               <CustomerPortalChat />
             </div>
+
+            {/* General Feedback Form */}
+            <GeneralFeedbackForm 
+              clientId={client?.id || ''} 
+              onSubmitted={() => {
+                // Refresh feedback data when new feedback is submitted
+                loadDashboardData()
+              }}
+            />
 
             {/* Feedback History */}
             {feedback.length > 0 && (

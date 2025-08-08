@@ -1,12 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase-client'
 import type { Database, Client, Job, JobWithClient } from '@/types/database'
 import bcrypt from 'bcryptjs'
-
-// Create a Supabase client for customer portal operations
-const supabase = createClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 interface LoginResult {
   success: boolean
@@ -24,6 +18,10 @@ interface CustomerPortalSession {
 // Customer Portal Authentication
 export async function loginCustomerPortal(email: string, password: string): Promise<LoginResult> {
   try {
+    if (!supabase) {
+      return { success: false, error: 'Database connection not available' }
+    }
+
     // Find client portal user by email
     const { data: portalUser, error: userError } = await supabase
       .from('client_portal_users')
@@ -87,6 +85,11 @@ export function clearCustomerPortalSession(): void {
 // Get client information
 export async function getClientInfo(clientId: string): Promise<Client | null> {
   try {
+    if (!supabase) {
+      console.error('Database connection not available')
+      return null
+    }
+
     const { data: client, error } = await supabase
       .from('clients')
       .select('*')
@@ -117,6 +120,11 @@ export async function getClientJobs(
   } = {}
 ): Promise<JobWithClient[]> {
   try {
+    if (!supabase) {
+      console.error('Database connection not available')
+      return []
+    }
+
     let query = supabase
       .from('jobs')
       .select(`
@@ -160,6 +168,11 @@ export async function getClientJobs(
 // Get job statistics for client
 export async function getClientJobStats(clientId: string) {
   try {
+    if (!supabase) {
+      console.error('Database connection not available')
+      return null
+    }
+
     const { data: jobs, error } = await supabase
       .from('jobs')
       .select('status, total_time_seconds, agreed_hours, actual_cost, estimated_cost')
@@ -196,6 +209,11 @@ export async function getClientReports(
   } = {}
 ) {
   try {
+    if (!supabase) {
+      console.error('Database connection not available')
+      return []
+    }
+
     let query = supabase
       .from('reports')
       .select(`
@@ -242,6 +260,11 @@ export async function getClientReports(
 // Get recent client feedback
 export async function getClientFeedback(clientId: string, limit = 5) {
   try {
+    if (!supabase) {
+      console.error('Database connection not available')
+      return []
+    }
+
     const { data: feedback, error } = await supabase
       .from('feedback')
       .select(`
@@ -272,6 +295,10 @@ export async function createCustomerPortalAccount(
   password: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    if (!supabase) {
+      return { success: false, error: 'Database connection not available' }
+    }
+
     // Hash password
     const passwordHash = await bcrypt.hash(password, 12)
 

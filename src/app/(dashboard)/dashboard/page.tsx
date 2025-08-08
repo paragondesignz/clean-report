@@ -24,7 +24,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { formatDate, formatTime } from "@/lib/utils"
 import { getDashboardStats, getJobs, testDatabaseConnection } from "@/lib/supabase-client"
-import { FeedbackDashboard } from "@/components/feedback-dashboard"
+import { CustomerFeedbackInsights } from "@/components/dashboard/customer-feedback-insights"
 import { NotificationBell } from "@/components/notifications/notification-bell"
 import { useNotification } from "@/components/notifications/notification-provider"
 import type { Job, JobWithClient } from "@/types/database"
@@ -286,7 +286,7 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <FeedbackDashboard />
+              <CustomerFeedbackInsights />
             </CardContent>
           </Card>
         </div>

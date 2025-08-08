@@ -608,7 +608,7 @@ export const getJob = async (jobId: string) => {
       photos: photosResult.data || []
     }
     
-    console.log('Job data retrieved:', result)
+    // console.log('Job data retrieved:', result) // Removed to prevent React serialization errors
     return result
   } catch (error) {
     console.error('getJob error:', error)
@@ -2769,6 +2769,11 @@ export const updateUserHourlyRate = async (hourlyRate: number) => {
 
 export const getUserHourlyRate = async () => {
   try {
+    if (!supabase) {
+      console.error('Supabase client not available')
+      return 0
+    }
+
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
@@ -2776,13 +2781,17 @@ export const getUserHourlyRate = async () => {
       .from('user_profiles')
       .select('hourly_rate')
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle() // Use maybeSingle instead of single to handle 0 rows gracefully
 
-    if (error) throw error
+    if (error) {
+      console.error('Error getting user hourly rate:', error)
+      return 0 // Return default instead of throwing
+    }
+
     return data?.hourly_rate || 0
   } catch (error) {
     console.error('Error getting user hourly rate:', error)
-    throw error
+    return 0 // Return default instead of throwing
   }
 }
 
