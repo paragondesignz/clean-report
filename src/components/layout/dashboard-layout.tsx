@@ -239,21 +239,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </Link>
               )}
               
-              {userRole === 'admin' && access.aiFeatures && (
-                <Link
-                  href="/ai-tools"
-                  className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    pathname === "/ai-tools"
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                  }`}
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  <Sparkles className="w-5 h-5 mr-3" />
-                  AI Tools
-                </Link>
-              )}
-              
 
             </div>
           </div>

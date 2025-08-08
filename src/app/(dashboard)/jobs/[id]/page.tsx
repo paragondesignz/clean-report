@@ -63,7 +63,8 @@ import {
   uploadPhoto,
   deletePhoto,
   getPhotoUrl,
-  addTaskToFutureInstances
+  addTaskToFutureInstances,
+  getRecurringJobInstances
 } from "@/lib/supabase-client"
 import { GoogleMaps } from "@/components/ui/google-maps"
 import { JobSubContractorAssignment } from "@/components/job-sub-contractor-assignment"
@@ -98,6 +99,8 @@ export default function JobDetailsPage() {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
   const [isRecurringTaskDialogOpen, setIsRecurringTaskDialogOpen] = useState(false)
   const [pendingTaskData, setPendingTaskData] = useState<{title: string, description: string} | null>(null)
+  const [recurringJobInstances, setRecurringJobInstances] = useState<Job[]>([])
+  const [currentInstanceIndex, setCurrentInstanceIndex] = useState(-1)
   const taskSectionRef = useRef<HTMLDivElement>(null)
   const [formData, setFormData] = useState({
     title: "",
@@ -175,12 +178,38 @@ export default function JobDetailsPage() {
     }
   }, [])
 
+  const fetchRecurringJobInstances = useCallback(async (recurringJobId: string, currentJobId: string) => {
+    try {
+      const instances = await getRecurringJobInstances(recurringJobId)
+      if (instances && instances.length > 0) {
+        // Sort by scheduled date to ensure proper order
+        const sortedInstances = instances.sort((a, b) => 
+          new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime()
+        )
+        setRecurringJobInstances(sortedInstances)
+        
+        // Find current job's position in the array
+        const currentIndex = sortedInstances.findIndex(instance => instance.id === currentJobId)
+        setCurrentInstanceIndex(currentIndex)
+      }
+    } catch (error) {
+      console.error('Error fetching recurring job instances:', error)
+    }
+  }, [])
+
   useEffect(() => {
     if (params.id) {
       fetchJobDetails(params.id as string)
       fetchClients()
     }
   }, [params.id, fetchJobDetails, fetchClients])
+
+  // Fetch recurring job instances when job data is loaded
+  useEffect(() => {
+    if (job?.recurring_job_id && job.id) {
+      fetchRecurringJobInstances(job.recurring_job_id, job.id)
+    }
+  }, [job?.recurring_job_id, job?.id, fetchRecurringJobInstances])
 
   const hasUnsavedChanges = () => {
     return JSON.stringify(formData) !== JSON.stringify(originalFormData)
@@ -548,6 +577,41 @@ export default function JobDetailsPage() {
     }
   }
 
+  const navigateToRecurringInstance = (direction: 'prev' | 'next') => {
+    if (recurringJobInstances.length === 0 || currentInstanceIndex === -1) return
+    
+    let targetIndex = -1
+    if (direction === 'prev' && currentInstanceIndex > 0) {
+      targetIndex = currentInstanceIndex - 1
+    } else if (direction === 'next' && currentInstanceIndex < recurringJobInstances.length - 1) {
+      targetIndex = currentInstanceIndex + 1
+    }
+    
+    if (targetIndex >= 0) {
+      const targetJob = recurringJobInstances[targetIndex]
+      if (hasUnsavedChanges()) {
+        setPendingNavigation(`/jobs/${targetJob.id}`)
+        setIsUnsavedChangesDialogOpen(true)
+      } else {
+        router.push(`/jobs/${targetJob.id}`)
+      }
+    }
+  }
+
+  const getPreviousInstance = () => {
+    if (currentInstanceIndex > 0) {
+      return recurringJobInstances[currentInstanceIndex - 1]
+    }
+    return null
+  }
+
+  const getNextInstance = () => {
+    if (currentInstanceIndex >= 0 && currentInstanceIndex < recurringJobInstances.length - 1) {
+      return recurringJobInstances[currentInstanceIndex + 1]
+    }
+    return null
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'scheduled': return 'bg-blue-100 text-blue-800'
@@ -692,6 +756,79 @@ export default function JobDetailsPage() {
           )}
         </div>
       </div>
+
+      {/* Recurring Job Navigation */}
+      {job?.recurring_job_id && recurringJobInstances.length > 1 && currentInstanceIndex >= 0 && (
+        <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <RefreshCw className="h-5 w-5 text-blue-600" />
+                <div>
+                  <h3 className="font-medium text-blue-900">Recurring Job Instance Navigation</h3>
+                  <p className="text-sm text-blue-700">
+                    Instance {currentInstanceIndex + 1} of {recurringJobInstances.length}
+                    {job && ` • ${formatDate(job.scheduled_date)}`}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigateToRecurringInstance('prev')}
+                  disabled={!getPreviousInstance()}
+                  className="border-blue-200 text-blue-700 hover:bg-blue-100"
+                  title={getPreviousInstance() ? `Previous: ${formatDate(getPreviousInstance()!.scheduled_date)}` : 'No previous instance'}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                
+                <div className="hidden sm:flex items-center space-x-2 px-3 py-1 bg-white rounded-md border border-blue-200">
+                  <span className="text-sm text-blue-600 font-medium">
+                    {currentInstanceIndex + 1} / {recurringJobInstances.length}
+                  </span>
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigateToRecurringInstance('next')}
+                  disabled={!getNextInstance()}
+                  className="border-blue-200 text-blue-700 hover:bg-blue-100"
+                  title={getNextInstance() ? `Next: ${formatDate(getNextInstance()!.scheduled_date)}` : 'No next instance'}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+            
+            {/* Instance preview info */}
+            <div className="mt-3 pt-3 border-t border-blue-200">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                {getPreviousInstance() && (
+                  <div className="text-blue-600">
+                    <span className="font-medium">← Previous: </span>
+                    {formatDate(getPreviousInstance()!.scheduled_date)}
+                  </div>
+                )}
+                <div className="text-blue-800 font-medium text-center">
+                  <span className="bg-blue-100 px-2 py-1 rounded">Current</span>
+                </div>
+                {getNextInstance() && (
+                  <div className="text-blue-600 text-right">
+                    <span className="font-medium">Next: </span>
+                    {formatDate(getNextInstance()!.scheduled_date)} →
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Unsaved Changes Dialog */}
       <Dialog open={isUnsavedChangesDialogOpen} onOpenChange={setIsUnsavedChangesDialogOpen}>

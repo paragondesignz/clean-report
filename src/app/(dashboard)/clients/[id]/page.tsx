@@ -1165,10 +1165,48 @@ export default function ClientDetailsPage() {
             </CardContent>
           </Card>
 
-        </div>
+          {/* Client Location Map */}
+          {client.address && (
+            <GoogleMaps
+              address={client.address}
+              title={`${client.name}'s Location`}
+              height="300px"
+              showDirections={true}
+            />
+          )}
 
-        {/* Sidebar - removed duplicate Notes section */}
-        <div className="space-y-6">
+          {/* Sub-Contractor Assignment */}
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="text-slate-900 flex items-center">
+                <User className="h-5 w-5 mr-2" />
+                Sub-Contractor Assignment
+              </CardTitle>
+              <CardDescription>
+                Assign preferred sub-contractors for this client
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="text-center py-6 text-slate-500">
+                  <User className="h-8 w-8 mx-auto mb-2 text-slate-400" />
+                  <p className="text-sm">No sub-contractors assigned</p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Sub-contractor management coming soon
+                  </p>
+                </div>
+                <Button 
+                  variant="outline" 
+                  className="w-full" 
+                  disabled
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Assign Sub-Contractor
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Client Details */}
           <Card className="border-slate-200">
             <CardHeader>
@@ -1203,16 +1241,6 @@ export default function ClientDetailsPage() {
                   description: `"${task.title}" has been added to your task suggestions.`,
                 })
               }}
-            />
-          )}
-
-          {/* Client Location Map */}
-          {client.address && (
-            <GoogleMaps
-              address={client.address}
-              title={`${client.name}'s Location`}
-              height="300px"
-              showDirections={true}
             />
           )}
 
