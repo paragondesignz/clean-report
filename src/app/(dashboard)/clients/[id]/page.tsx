@@ -45,6 +45,9 @@ import { getClient, getJobsForClient, getRecurringJobsForClient, getClientTaskCo
 import type { Client, Job } from "@/types/database"
 import { GoogleMaps } from "@/components/ui/google-maps"
 import { TaskSuggestions } from "@/components/ai/task-suggestions"
+import { JobNotes } from "@/components/job-notes"
+import { Switch } from "@/components/ui/switch"
+import { createJob, createRecurringJob } from "@/lib/supabase-client"
 
 interface ClientNote {
   id: string
@@ -637,9 +640,83 @@ export default function ClientDetailsPage() {
   }
 
   // Quick Actions
+  const [isScheduleJobDialogOpen, setIsScheduleJobDialogOpen] = useState(false)
+  const [isRecurringJob, setIsRecurringJob] = useState(false)
+  const [jobFormData, setJobFormData] = useState({
+    title: "",
+    description: "",
+    scheduled_date: "",
+    scheduled_time: "",
+    end_time: "",
+    frequency: "weekly" as "daily" | "weekly" | "bi_weekly" | "monthly",
+    start_date: "",
+    end_date: ""
+  })
+
   const handleScheduleJob = () => {
-    const url = `/jobs?client=${client?.id}&clientName=${encodeURIComponent(client?.name || '')}`
-    window.open(url, '_blank')
+    setIsScheduleJobDialogOpen(true)
+    // Reset form
+    setJobFormData({
+      title: "",
+      description: "",
+      scheduled_date: new Date().toISOString().split('T')[0],
+      scheduled_time: "09:00",
+      end_time: "17:00",
+      frequency: "weekly",
+      start_date: new Date().toISOString().split('T')[0],
+      end_date: ""
+    })
+    setIsRecurringJob(false)
+  }
+
+  const handleCreateJob = async () => {
+    if (!client) return
+    
+    try {
+      if (isRecurringJob) {
+        // Create recurring job
+        await createRecurringJob({
+          client_id: client.id,
+          title: jobFormData.title,
+          description: jobFormData.description,
+          frequency: jobFormData.frequency,
+          start_date: jobFormData.start_date,
+          end_date: jobFormData.end_date || null,
+          scheduled_time: jobFormData.scheduled_time,
+          is_active: true
+        })
+        toast({
+          title: "Success",
+          description: "Recurring job created successfully"
+        })
+      } else {
+        // Create one-off job
+        await createJob({
+          client_id: client.id,
+          title: jobFormData.title,
+          description: jobFormData.description,
+          scheduled_date: jobFormData.scheduled_date,
+          scheduled_time: jobFormData.scheduled_time,
+          end_time: jobFormData.end_time,
+          status: "scheduled"
+        })
+        toast({
+          title: "Success",
+          description: "Job scheduled successfully"
+        })
+      }
+      
+      setIsScheduleJobDialogOpen(false)
+      // Refresh data
+      fetchClientDetails(client.id)
+    } catch (error) {
+      console.error('Error creating job:', error)
+      toast({
+        title: "Error",
+        description: "Failed to create job",
+        variant: "destructive"
+      })
+    }
   }
 
   const handleSendEmail = () => {
@@ -663,15 +740,6 @@ export default function ClientDetailsPage() {
     window.open(phoneUrl)
   }
 
-  const handleViewJobs = () => {
-    const url = `/jobs?client=${client?.id}&clientName=${encodeURIComponent(client?.name || '')}`
-    window.open(url, '_blank')
-  }
-
-  const handleViewHistory = () => {
-    const url = `/jobs?client=${client?.id}&clientName=${encodeURIComponent(client?.name || '')}&filter=completed`
-    window.open(url, '_blank')
-  }
 
   const handleCreateReport = () => {
     const url = `/reports?client=${client?.id}&clientName=${encodeURIComponent(client?.name || '')}`
@@ -869,7 +937,7 @@ export default function ClientDetailsPage() {
               Quick Actions
             </CardTitle>
             <Badge variant="secondary" className="text-xs">
-              8 actions available
+              6 actions available
             </Badge>
           </div>
         </CardHeader>
@@ -890,28 +958,6 @@ export default function ClientDetailsPage() {
                   <div className="text-left">
                     <div className="font-medium">Schedule Job</div>
                     <div className="text-xs opacity-90">Create a new job for this client</div>
-                  </div>
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={handleViewJobs} 
-                  className="w-full justify-start h-auto py-3 px-4 hover:bg-blue-50 border-blue-200"
-                >
-                  <ExternalLink className="h-4 w-4 mr-3" />
-                  <div className="text-left">
-                    <div className="font-medium">View Jobs</div>
-                    <div className="text-xs text-gray-600">See all client jobs</div>
-                  </div>
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={handleViewHistory} 
-                  className="w-full justify-start h-auto py-3 px-4 hover:bg-blue-50 border-blue-200"
-                >
-                  <History className="h-4 w-4 mr-3" />
-                  <div className="text-left">
-                    <div className="font-medium">View History</div>
-                    <div className="text-xs text-gray-600">Past job records</div>
                   </div>
                 </Button>
               </div>
@@ -997,6 +1043,42 @@ export default function ClientDetailsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Recurring Jobs */}
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="text-slate-900">Recurring Jobs</CardTitle>
+              <CardDescription>
+                Scheduled recurring jobs for this client
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ClientRecurringJobsList clientId={client.id} />
+            </CardContent>
+          </Card>
+
+          {/* Jobs List */}
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="text-slate-900">Jobs</CardTitle>
+              <CardDescription>
+                All job instances for this client
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ClientJobsList clientId={client.id} />
+            </CardContent>
+          </Card>
+
+          {/* Notes using JobNotes component */}
+          <JobNotes 
+            jobId={client.id} 
+            jobTitle={`Client: ${client.name}`}
+            isRecurringJob={false}
+          />
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
           {/* Client Information */}
           <Card className="border-slate-200">
             <CardHeader>
@@ -1070,83 +1152,9 @@ export default function ClientDetailsPage() {
             </CardContent>
           </Card>
 
-          {/* Notes */}
-          <Card className="border-slate-200">
-            <CardHeader>
-              <CardTitle className="text-slate-900">Notes</CardTitle>
-              <CardDescription>
-                Add notes and observations about the client
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex space-x-2">
-                <Textarea
-                  placeholder="Add a note..."
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  className="flex-1"
-                />
-                <Button onClick={handleAddNote} disabled={!newNote.trim()}>
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="space-y-3">
-                {client.notes?.slice().reverse().map((note) => (
-                  <div key={note.id} className="p-3 bg-slate-50 rounded-lg">
-                    {editingNote?.id === note.id ? (
-                      <div className="space-y-2">
-                        <Textarea
-                          value={editingNote.content}
-                          onChange={(e) => setEditingNote({ ...editingNote, content: e.target.value })}
-                          rows={3}
-                        />
-                        <div className="flex space-x-2">
-                          <Button size="sm" onClick={handleSaveNote}>
-                            <Save className="h-3 w-3 mr-1" />
-                            Save
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => setEditingNote(null)}>
-                            <X className="h-3 w-3 mr-1" />
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-sm text-slate-700">{note.content}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <p className="text-xs text-slate-500">
-                            {new Date(note.created_at).toLocaleString()}
-                          </p>
-                          <div className="flex space-x-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditNote(note)}
-                              className="text-blue-600 hover:text-blue-700 h-6 px-2"
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteNote(note.id)}
-                              className="text-red-600 hover:text-red-700 h-6 px-2"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
-        {/* Sidebar */}
+        {/* Sidebar - removed duplicate Notes section */}
         <div className="space-y-6">
           {/* Client Stats */}
           <Card className="border-slate-200">
@@ -1192,29 +1200,6 @@ export default function ClientDetailsPage() {
             </CardContent>
           </Card>
 
-          {/* Recurring Jobs */}
-          <Card className="border-slate-200">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-slate-900">Recurring Jobs</CardTitle>
-                <CardDescription>
-                  Scheduled recurring jobs for this client
-                </CardDescription>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push('/calendar')}
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                View Calendar
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <ClientRecurringJobsList clientId={client.id} />
-            </CardContent>
-          </Card>
-
           {/* AI Task Suggestions */}
           {aiSuggestionsData && (
             <TaskSuggestions
@@ -1231,29 +1216,6 @@ export default function ClientDetailsPage() {
             />
           )}
 
-          {/* Recent Jobs */}
-          <Card className="border-slate-200">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-slate-900">Recent Jobs</CardTitle>
-                <CardDescription>
-                  Latest individual job instances (excluding recurring jobs)
-                </CardDescription>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleViewJobs}
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                View All
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <ClientJobsList clientId={client.id} />
-            </CardContent>
-          </Card>
-
           {/* Client Location Map */}
           {client.address && (
             <GoogleMaps
@@ -1266,6 +1228,141 @@ export default function ClientDetailsPage() {
 
         </div>
       </div>
+
+      {/* Schedule Job Dialog */}
+      <Dialog open={isScheduleJobDialogOpen} onOpenChange={setIsScheduleJobDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Schedule Job for {client.name}</DialogTitle>
+            <DialogDescription>
+              Create a new job or recurring schedule for this client
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* Job Type Toggle */}
+            <div className="flex items-center space-x-2">
+              <Switch 
+                id="recurring-toggle" 
+                checked={isRecurringJob} 
+                onCheckedChange={setIsRecurringJob} 
+              />
+              <Label htmlFor="recurring-toggle">
+                {isRecurringJob ? 'Recurring Job' : 'One-time Job'}
+              </Label>
+            </div>
+
+            <div className="grid gap-4">
+              <div>
+                <Label htmlFor="title">Job Title</Label>
+                <Input
+                  id="title"
+                  value={jobFormData.title}
+                  onChange={(e) => setJobFormData({ ...jobFormData, title: e.target.value })}
+                  placeholder="e.g., Weekly Cleaning, Deep Clean"
+                  required
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={jobFormData.description}
+                  onChange={(e) => setJobFormData({ ...jobFormData, description: e.target.value })}
+                  placeholder="Describe the job requirements..."
+                  required
+                />
+              </div>
+
+              {isRecurringJob ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="frequency">Frequency</Label>
+                      <Select value={jobFormData.frequency} onValueChange={(value: any) => setJobFormData({ ...jobFormData, frequency: value })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="bi_weekly">Bi-weekly</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="scheduled_time">Time</Label>
+                      <Input
+                        id="scheduled_time"
+                        type="time"
+                        value={jobFormData.scheduled_time}
+                        onChange={(e) => setJobFormData({ ...jobFormData, scheduled_time: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="start_date">Start Date</Label>
+                      <Input
+                        id="start_date"
+                        type="date"
+                        value={jobFormData.start_date}
+                        onChange={(e) => setJobFormData({ ...jobFormData, start_date: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="end_date">End Date (Optional)</Label>
+                      <Input
+                        id="end_date"
+                        type="date"
+                        value={jobFormData.end_date}
+                        onChange={(e) => setJobFormData({ ...jobFormData, end_date: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="scheduled_date">Date</Label>
+                    <Input
+                      id="scheduled_date"
+                      type="date"
+                      value={jobFormData.scheduled_date}
+                      onChange={(e) => setJobFormData({ ...jobFormData, scheduled_date: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="scheduled_time">Time</Label>
+                    <Input
+                      id="scheduled_time"
+                      type="time"
+                      value={jobFormData.scheduled_time}
+                      onChange={(e) => setJobFormData({ ...jobFormData, scheduled_time: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsScheduleJobDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateJob} disabled={!jobFormData.title || !jobFormData.description}>
+              {isRecurringJob ? 'Create Recurring Job' : 'Schedule Job'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 
