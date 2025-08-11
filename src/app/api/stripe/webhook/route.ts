@@ -18,6 +18,10 @@ export async function POST(request: NextRequest) {
     if (event.type === 'payment_intent.succeeded') {
       const paymentIntent = event.data.object as any
       
+      if (!supabase) {
+        return NextResponse.json({ error: 'Database connection not available' }, { status: 500 })
+      }
+      
       const { error } = await supabase
         .from('stripe_payments')
         .update({ 
@@ -31,6 +35,10 @@ export async function POST(request: NextRequest) {
       }
     } else if (event.type === 'payment_intent.payment_failed') {
       const paymentIntent = event.data.object as any
+      
+      if (!supabase) {
+        return NextResponse.json({ error: 'Database connection not available' }, { status: 500 })
+      }
       
       const { error } = await supabase
         .from('stripe_payments')

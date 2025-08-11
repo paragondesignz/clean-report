@@ -542,20 +542,6 @@ export default function ReportsPage() {
           icon: Plus,
           onClick: () => setIsGenerateDialogOpen(true)
         }}
-        additionalButtons={[
-          {
-            label: "Advanced Builder",
-            icon: Settings,
-            onClick: handleAdvancedReportBuilder,
-            variant: "outline"
-          },
-          {
-            label: "Configuration",
-            icon: Settings,
-            onClick: () => setShowConfiguration(true),
-            variant: "outline"
-          }
-        ]}
         onRowClick={(row) => row.reportUrl}
         searchPlaceholder="Search reports by job title or client name..."
         filterOptions={[

@@ -1070,7 +1070,7 @@ export default function JobDetailsPage() {
               
               <CostSummary 
                 jobId={job.id}
-                agreedHours={job.agreed_hours}
+                agreedHours={job.agreed_hours ?? undefined}
                 refreshTrigger={refreshTrigger}
               />
               
@@ -1511,6 +1511,7 @@ export default function JobDetailsPage() {
                 className="bg-white/10 backdrop-blur-md border-white/20 text-white hover:bg-white/20 hover:text-white transition-all duration-200"
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (!job.photos?.[currentPhotoIndex]) return;
                   const link = document.createElement('a');
                   link.href = getPhotoUrl(job.photos[currentPhotoIndex].file_path);
                   link.download = job.photos[currentPhotoIndex].file_name;
@@ -1528,6 +1529,7 @@ export default function JobDetailsPage() {
                 className="bg-red-500/20 backdrop-blur-md border-red-500/30 text-red-100 hover:bg-red-500/30 hover:text-white transition-all duration-200"
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (!job.photos?.[currentPhotoIndex]) return;
                   handleDeletePhoto(job.photos[currentPhotoIndex].id);
                   if (job.photos.length === 1) {
                     closeLightbox();

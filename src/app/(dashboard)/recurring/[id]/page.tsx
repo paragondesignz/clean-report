@@ -199,7 +199,7 @@ export default function RecurringJobDetailsPage({ params }: { params: Promise<{ 
 
   const handleDelete = async () => {
     try {
-      await deleteRecurringJob(resolvedParams.id)
+      await deleteRecurringJob(resolvedParams.id, 'all')
       toast({
         title: "Success",
         description: "Recurring job deleted successfully"
@@ -256,32 +256,32 @@ export default function RecurringJobDetailsPage({ params }: { params: Promise<{ 
 
   const instanceColumns = [
     {
-      accessorKey: "scheduled_date",
-      header: "Date",
-      cell: ({ row }: any) => formatListDate(row.original.scheduled_date)
+      key: "scheduled_date",
+      label: "Date",
+      render: (value: any, row: any) => formatListDate(row.scheduled_date)
     },
     {
-      accessorKey: "scheduled_time",
-      header: "Time",
-      cell: ({ row }: any) => row.original.scheduled_time || "Not set"
+      key: "scheduled_time",
+      label: "Time",
+      render: (value: any, row: any) => row.scheduled_time || "Not set"
     },
     {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }: any) => (
-        <Badge className={getStatusBadgeColor(row.original.status)}>
-          {row.original.status.replace('_', ' ')}
+      key: "status",
+      label: "Status",
+      render: (value: any, row: any) => (
+        <Badge className={getStatusBadgeColor(row.status)}>
+          {row.status.replace('_', ' ')}
         </Badge>
       )
     },
     {
-      accessorKey: "actions",
-      header: "Actions",
-      cell: ({ row }: any) => (
+      key: "actions",
+      label: "Actions",
+      render: (value: any, row: any) => (
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => router.push(`/jobs/${row.original.id}`)}
+          onClick={() => router.push(`/jobs/${row.id}`)}
         >
           <Eye className="h-4 w-4 mr-1" />
           View
@@ -551,6 +551,7 @@ export default function RecurringJobDetailsPage({ params }: { params: Promise<{ 
             </div>
           ) : jobInstances.length > 0 ? (
             <DataTable
+              title="Job Instances"
               columns={instanceColumns}
               data={jobInstances}
             />

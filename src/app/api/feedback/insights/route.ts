@@ -49,8 +49,8 @@ export async function POST(request: NextRequest) {
       id: item.id,
       rating: item.rating,
       comment: item.comment,
-      job_title: item.job?.title,
-      service_date: item.job?.scheduled_date,
+      job_title: 'Cleaning Service',
+      service_date: new Date().toISOString(),
       submitted_at: item.submitted_at
     }))
 

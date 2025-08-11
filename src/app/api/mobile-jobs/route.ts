@@ -76,8 +76,8 @@ export async function GET(request: NextRequest) {
     // Process jobs to include photo URLs and flatten photos from tasks
     const processedJobs = jobs?.map(job => {
       // Flatten photos from all tasks
-      const allPhotos = job.tasks?.flatMap(task => 
-        task.photos?.map(photo => ({
+      const allPhotos = job.tasks?.flatMap((task: any) => 
+        task.photos?.map((photo: any) => ({
           ...photo,
           photo_url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/photos/${photo.file_path}`,
           task_id: task.id

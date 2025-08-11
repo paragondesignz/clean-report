@@ -14,7 +14,6 @@ import {
   AlertCircle,
   Play,
   Pause,
-  Stop,
   Camera,
   FileText,
   Phone,

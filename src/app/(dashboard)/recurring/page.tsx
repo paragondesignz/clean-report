@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast"
 import { Plus, Edit, Trash2, Calendar, Clock, User, RefreshCw, CheckCircle, XCircle, Building2, DollarSign, Play, Eye, List } from "lucide-react"
 import { getRecurringJobs, getRecurringJobsCount, createRecurringJob, updateRecurringJob, deleteRecurringJob, getClients, testRecurringJobsTable, checkRequiredTables, generateJobInstances, getRecurringJobInstances } from "@/lib/supabase-client"
-import { formatDate, formatTime, formatDistanceToNow, formatListDate } from "@/lib/utils"
+import { formatDate, formatTime, formatListDate } from "@/lib/utils"
 import { DataTable } from "@/components/ui/data-table"
 import { useSubscription } from "@/hooks/use-subscription"
 import { UpgradePrompt } from "@/components/ui/upgrade-prompt"
@@ -137,7 +137,7 @@ export default function RecurringJobsPage() {
       // Prepare data with proper null handling for optional date fields
       const submitData = {
         ...formData,
-        end_date: formData.end_date || null // Convert empty string to null
+        end_date: formData.end_date || undefined // Convert empty string to undefined
       }
       
       if (editingJob) {
@@ -172,7 +172,7 @@ export default function RecurringJobsPage() {
     if (!confirm("Are you sure you want to delete this recurring job?")) return
     
     try {
-      await deleteRecurringJob(jobId)
+      await deleteRecurringJob(jobId, 'all')
       toast({
         title: "Success",
         description: "Recurring job deleted successfully"

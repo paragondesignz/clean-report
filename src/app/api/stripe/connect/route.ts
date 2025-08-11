@@ -4,6 +4,9 @@ import { supabase } from '@/lib/supabase-client'
 
 export async function POST(request: NextRequest) {
   try {
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database connection not available' }, { status: 500 })
+    }
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
             </div>
             
             <div style="padding: 30px 0;">
-              ${message.split('\n').map(line => 
+              ${message.split('\n').map((line: string) => 
                 line.trim() 
                   ? line.startsWith('🔗') || line.startsWith('📱') || line.startsWith('📋')
                     ? `<h3 style="color: #142a0a; margin: 20px 0 10px 0;">${line}</h3>`
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
           {
             filename: 'mobile-portal-qr-code.png',
             content: qrCodeBuffer,
-            content_type: 'image/png'
+            contentType: 'image/png'
           }
         ]
       })
