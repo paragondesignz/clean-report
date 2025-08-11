@@ -4,9 +4,10 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
   try {
+    const { jobId } = await params
     const cookieStore = cookies()
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -58,7 +59,7 @@ export async function GET(
           specialties
         )
       `)
-      .eq('job_id', params.jobId)
+      .eq('job_id', jobId)
       .order('assigned_at', { ascending: false })
 
     if (error) {

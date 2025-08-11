@@ -3,10 +3,10 @@ import { createServerClient } from '@/lib/supabase-client'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const { userId } = params
+    const { userId } = await params
 
     if (!userId) {
       return new NextResponse('User ID is required', { status: 400 })

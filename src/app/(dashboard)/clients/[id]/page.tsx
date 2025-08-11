@@ -150,7 +150,7 @@ function ClientRecurringJobsList({ clientId }: { clientId: string }) {
             <div className="flex space-x-2">
               <RecurringJobEditDialog 
                 recurringJob={recurringJob} 
-                onUpdate={() => fetchRecurringJobs()}
+                onUpdate={() => loadRecurringJobs()}
               />
               <Button
                 variant="outline"
@@ -271,7 +271,7 @@ function ClientJobsList({ clientId }: { clientId: string }) {
                 <div className="flex items-center space-x-2">
                   <span className="font-medium">{job.title}</span>
                   {job.recurring_job_id && (
-                    <RefreshCw className="h-3 w-3 text-purple-600" title="Recurring job instance" />
+                    <RefreshCw className="h-3 w-3 text-purple-600" />
                   )}
                 </div>
                 <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
@@ -730,7 +730,7 @@ export default function ClientDetailsPage() {
           description: jobFormData.description,
           frequency: jobFormData.frequency,
           start_date: jobFormData.start_date,
-          end_date: jobFormData.end_date || null,
+          end_date: jobFormData.end_date || undefined,
           scheduled_time: jobFormData.scheduled_time,
           is_active: true
         })

@@ -6,7 +6,7 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
 
 // Initialize Stripe client only if secret key is available
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2023-10-16',
+  apiVersion: '2024-11-20.acacia',
 }) : null
 
 // Types for Stripe integration

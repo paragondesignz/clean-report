@@ -362,6 +362,7 @@ export const createJob = async (jobData: {
   description: string
   scheduled_date: string
   scheduled_time: string
+  end_time?: string
   agreed_hours?: string
   status?: 'enquiry' | 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
 }) => {
@@ -410,6 +411,7 @@ export const updateJob = async (id: string, jobData: Partial<{
   description: string
   scheduled_date: string
   scheduled_time: string
+  end_time: string
   status: 'enquiry' | 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
 }>) => {
   const { data, error } = await getSupabaseClient()

@@ -229,9 +229,8 @@ export default function JobDetailsPage() {
         description: formData.description,
         scheduled_date: formData.scheduled_date,
         scheduled_time: formData.scheduled_time,
-        end_time: formData.end_time,
-        status: formData.status,
-        client_id: formData.client_id
+        end_time: formData.end_time || undefined,
+        status: formData.status
       })
 
       toast({
@@ -500,7 +499,7 @@ export default function JobDetailsPage() {
       setUploadingPhotos(true)
       
       for (const file of selectedFiles) {
-        await uploadPhoto(job.id, file)
+        await uploadPhoto(file, job.id)
       }
 
       toast({
@@ -525,8 +524,11 @@ export default function JobDetailsPage() {
   const handleDeletePhoto = async (photoId: string) => {
     if (!job) return
 
+    const photo = job.photos?.find(p => p.id === photoId)
+    if (!photo) return
+
     try {
-      await deletePhoto(photoId)
+      await deletePhoto(photoId, photo.file_path)
       toast({
         title: "Success",
         description: "Photo deleted successfully"

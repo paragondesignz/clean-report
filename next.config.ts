@@ -2,12 +2,12 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   eslint: {
-    // Disable ESLint during build to allow deployment
-    ignoreDuringBuilds: true,
+    // Re-enable ESLint during build for proper error checking
+    ignoreDuringBuilds: false,
   },
   typescript: {
-    // Disable TypeScript checking during build to allow deployment
-    ignoreBuildErrors: true,
+    // Re-enable TypeScript checking during build for proper error checking
+    ignoreBuildErrors: false,
   },
   // Disable image optimization for now to avoid issues
   images: {

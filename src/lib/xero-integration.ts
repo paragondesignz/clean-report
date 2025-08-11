@@ -1,4 +1,4 @@
-import { Client } from 'xero-node'
+import { XeroClient } from 'xero-node'
 
 // Xero API Configuration
 const XERO_CLIENT_ID = process.env.NEXT_PUBLIC_XERO_CLIENT_ID || process.env.XERO_CLIENT_ID
@@ -6,7 +6,7 @@ const XERO_CLIENT_SECRET = process.env.XERO_CLIENT_SECRET
 const XERO_REDIRECT_URI = process.env.NEXT_PUBLIC_XERO_REDIRECT_URI || process.env.XERO_REDIRECT_URI
 
 // Initialize Xero client
-const xeroClient = new Client({
+const xeroClient = new XeroClient({
   clientId: XERO_CLIENT_ID,
   clientSecret: XERO_CLIENT_SECRET,
   redirectUris: [XERO_REDIRECT_URI],

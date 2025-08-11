@@ -4,9 +4,10 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const cookieStore = cookies()
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -49,7 +50,7 @@ export async function PUT(
     const { data: existingContractor } = await supabase
       .from('sub_contractors')
       .select('id, email')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('admin_id', user.id)
       .single()
 
@@ -64,7 +65,7 @@ export async function PUT(
         .select('id')
         .eq('admin_id', user.id)
         .eq('email', email)
-        .neq('id', params.id)
+        .neq('id', id)
         .single()
 
       if (emailExists) {
@@ -84,7 +85,7 @@ export async function PUT(
         specialties: specialties || [],
         status: status || 'pending'
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('admin_id', user.id)
       .select()
       .single()
@@ -113,9 +114,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const cookieStore = cookies()
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -150,7 +152,7 @@ export async function DELETE(
     const { data: existingContractor } = await supabase
       .from('sub_contractors')
       .select('id')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('admin_id', user.id)
       .single()
 
@@ -162,7 +164,7 @@ export async function DELETE(
     const { error } = await supabase
       .from('sub_contractors')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('admin_id', user.id)
 
     if (error) {

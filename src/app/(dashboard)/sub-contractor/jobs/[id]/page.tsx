@@ -74,7 +74,7 @@ interface JobPhoto {
 }
 
 
-export default function SubContractorJobDetail({ params }: { params: { id: string } }) {
+function SubContractorJobDetailClient({ jobId }: { jobId: string }) {
   const { toast } = useToast()
   const [job, setJob] = useState<JobDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -90,7 +90,7 @@ export default function SubContractorJobDetail({ params }: { params: { id: strin
     // Simulate loading job details
     setTimeout(() => {
       const mockJob: JobDetail = {
-        id: params.id,
+        id: jobId,
         title: 'Deep Clean - Johnson Residence',
         client_name: 'Sarah Johnson',
         client_address: '123 Oak Street, Downtown, CA 90210',
@@ -170,7 +170,7 @@ export default function SubContractorJobDetail({ params }: { params: { id: strin
       setJob(mockJob)
       setLoading(false)
     }, 1000)
-  }, [params.id])
+  }, [jobId])
 
 
 
@@ -643,4 +643,9 @@ export default function SubContractorJobDetail({ params }: { params: { id: strin
       </Dialog>
     </div>
   )
+}
+
+export default async function SubContractorJobDetail({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  return <SubContractorJobDetailClient jobId={id} />
 } 

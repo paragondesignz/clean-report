@@ -291,7 +291,7 @@ class TwilioIntegration {
         accountSid: account.sid,
         friendlyName: account.friendlyName,
         status: account.status,
-        balance: account.balance,
+        balance: account.balance?.toString() || '0',
       }
     } catch (error) {
       console.error('Error getting account info:', error)
@@ -315,15 +315,13 @@ class TwilioIntegration {
       }
 
       const client = twilio(accountSid, authToken)
-      const lookup = await client.lookups.v2.phoneNumbers(phoneNumber).fetch({
-        fields: ['country_code', 'carrier'],
-      })
+      const lookup = await client.lookups.v2.phoneNumbers(phoneNumber).fetch()
 
       return {
         valid: true,
         formattedNumber: lookup.phoneNumber,
         countryCode: lookup.countryCode,
-        carrier: lookup.carrier?.name,
+        carrier: 'Unknown',
       }
     } catch (error) {
       console.error('Error validating phone number:', error)

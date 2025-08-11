@@ -1348,16 +1348,9 @@ export interface FeedbackWithJob extends Feedback {
   job?: JobWithClient
 } 
 
-export interface SubContractor {
-  id: string
-  user_id: string
+// Extended SubContractor interface for frontend use
+export interface SubContractorExtended extends SubContractor {
   admin_id: string
-  first_name: string
-  last_name: string
-  email: string
-  phone: string
-  status: 'active' | 'inactive' | 'pending'
-  hourly_rate: number
   specialties: string[]
   availability: {
     monday: { start: string; end: string; available: boolean }
@@ -1368,17 +1361,10 @@ export interface SubContractor {
     saturday: { start: string; end: string; available: boolean }
     sunday: { start: string; end: string; available: boolean }
   }
-  created_at: string
-  updated_at: string
 }
 
-export interface SubContractorJobAssignment {
-  id: string
-  job_id: string
-  sub_contractor_id: string
-  assigned_at: string
-  status: 'assigned' | 'accepted' | 'in_progress' | 'completed' | 'cancelled'
-  notes: string
+// Extended SubContractorJobAssignment interface for frontend use
+export interface SubContractorJobAssignmentExtended extends SubContractorJobAssignment {
   admin_notes: string
 }
 

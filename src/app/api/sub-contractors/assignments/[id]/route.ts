@@ -4,9 +4,10 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const cookieStore = cookies()
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -52,7 +53,7 @@ export async function PATCH(
         *,
         sub_contractors!inner(admin_id)
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('sub_contractors.admin_id', user.id)
       .single()
 
@@ -73,7 +74,7 @@ export async function PATCH(
     const { data: updatedAssignment, error: updateError } = await supabase
       .from('sub_contractor_job_assignments')
       .update(updateData)
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single()
 
@@ -99,9 +100,10 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const cookieStore = cookies()
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -144,7 +146,7 @@ export async function DELETE(
         *,
         sub_contractors!inner(admin_id)
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('sub_contractors.admin_id', user.id)
       .single()
 
@@ -160,7 +162,7 @@ export async function DELETE(
     const { error: deleteError } = await supabase
       .from('sub_contractor_job_assignments')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
 
     if (deleteError) {
       console.error('Error deleting assignment:', deleteError)

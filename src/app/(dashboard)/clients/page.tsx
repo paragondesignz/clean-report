@@ -153,7 +153,7 @@ export default function ClientsPage() {
       label: 'Client',
       sortable: true,
       width: '300px',
-      render: (value: string, row: Client) => (
+      render: (value: string, row: any) => (
         <div className="flex items-center space-x-2 min-w-0">
           <div className="flex-shrink-0">
             {row.clientIcon}
